@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
   AdaptiveDpr,
@@ -31,6 +31,7 @@ import {
 type ShowroomSceneProps = {
   active?: boolean;
   compact: boolean;
+  activeRoom: number;
   progress: { current: number };
   reducedMotion?: boolean;
   onReady: () => void;
@@ -807,7 +808,26 @@ function Lighting({ compact }: { compact: boolean }) {
   );
 }
 
-function Showroom({ compact, progress, reducedMotion }: Pick<ShowroomSceneProps, "compact" | "progress" | "reducedMotion">) {
+function SceneReady({ onReady }: Pick<ShowroomSceneProps, "onReady">) {
+  const ready = useRef(false);
+
+  useFrame(() => {
+    if (ready.current) return;
+    ready.current = true;
+    window.requestAnimationFrame(onReady);
+  });
+
+  return null;
+}
+
+function Showroom({
+  compact,
+  progress,
+  reducedMotion,
+  renderSecondaryRooms,
+}: Pick<ShowroomSceneProps, "compact" | "progress" | "reducedMotion"> & {
+  renderSecondaryRooms: boolean;
+}) {
   return (
     <SurfaceMaterialLibrary>
       <color attach="background" args={["#aaa296"]} />
@@ -815,8 +835,12 @@ function Showroom({ compact, progress, reducedMotion }: Pick<ShowroomSceneProps,
       <Lighting compact={compact} />
       <ArchitecturalShell />
       <LivingRoom compact={compact} />
-      <Bedroom compact={compact} />
-      <Kitchen compact={compact} />
+      {renderSecondaryRooms ? (
+        <>
+          <Bedroom compact={compact} />
+          <Kitchen compact={compact} />
+        </>
+      ) : null}
       {!compact ? (
         <>
           <ContactShadows
@@ -860,28 +884,51 @@ function Showroom({ compact, progress, reducedMotion }: Pick<ShowroomSceneProps,
 export function ShowroomScene({
   active = true,
   compact,
+  activeRoom,
   progress,
   reducedMotion = false,
   onReady,
 }: ShowroomSceneProps) {
+  const [renderSecondaryRooms, setRenderSecondaryRooms] = useState(false);
+  const dpr: [number, number] = compact ? [1, 1.5] : [1, 1.75];
+  const shouldRenderSecondaryRooms = renderSecondaryRooms || activeRoom > 0;
+
+  useEffect(() => {
+    if (renderSecondaryRooms) return;
+
+    const requestIdle = window.requestIdleCallback?.bind(window);
+    const cancelIdle = window.cancelIdleCallback?.bind(window);
+
+    if (requestIdle && cancelIdle) {
+      const idleCallback = requestIdle(() => setRenderSecondaryRooms(true), {
+        timeout: 1800,
+      });
+
+      return () => cancelIdle(idleCallback);
+    }
+
+    const timeout = globalThis.setTimeout(() => setRenderSecondaryRooms(true), 1200);
+    return () => globalThis.clearTimeout(timeout);
+  }, [renderSecondaryRooms]);
+
   return (
     <Canvas
       camera={{ fov: compact ? 48 : 39, near: 0.1, far: 82, position: [compact ? 7.7 : 8.65, compact ? 3.1 : 2.95, 18] }}
-      dpr={compact ? [0.75, 1] : [1, 1.5]}
+      dpr={dpr}
       shadows="percentage"
       frameloop={active && !reducedMotion ? "always" : "demand"}
-      gl={{ antialias: !compact, alpha: false, powerPreference: "high-performance", stencil: false }}
+      gl={{ antialias: true, alpha: false, powerPreference: "high-performance", stencil: false }}
       performance={{ min: 0.55, max: 1, debounce: 260 }}
       onCreated={({ gl, scene }) => {
         gl.outputColorSpace = SRGBColorSpace;
         gl.toneMapping = ACESFilmicToneMapping;
         gl.toneMappingExposure = compact ? 0.96 : 1;
         scene.background = new Color("#aaa296");
-        onReady();
       }}
     >
-      <Showroom compact={compact} progress={progress} reducedMotion={reducedMotion} />
-      <AdaptiveDpr pixelated />
+      <Showroom compact={compact} progress={progress} reducedMotion={reducedMotion} renderSecondaryRooms={shouldRenderSecondaryRooms} />
+      <SceneReady onReady={onReady} />
+      <AdaptiveDpr />
     </Canvas>
   );
 }

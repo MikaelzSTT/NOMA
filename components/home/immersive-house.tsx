@@ -36,6 +36,7 @@ export function ImmersiveHouse() {
   const [sceneActive, setSceneActive] = useState(true);
   const [sceneEnabled, setSceneEnabled] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  const [sceneLoaderDelayElapsed, setSceneLoaderDelayElapsed] = useState(false);
 
   useEffect(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -138,7 +139,15 @@ export function ImmersiveHouse() {
     };
   }, [reducedMotion]);
 
+  useEffect(() => {
+    if (!sceneEnabled || sceneReady) return;
+
+    const loaderDelay = window.setTimeout(() => setSceneLoaderDelayElapsed(true), 1200);
+    return () => window.clearTimeout(loaderDelay);
+  }, [sceneEnabled, sceneReady]);
+
   const room = rooms[activeRoom];
+  const showSceneLoader = sceneEnabled && !sceneReady && sceneLoaderDelayElapsed;
 
   return (
     <section
@@ -156,7 +165,8 @@ export function ImmersiveHouse() {
             fill
             loading="eager"
             fetchPriority="high"
-            sizes="100vw"
+            sizes="(max-aspect-ratio: 3/4) 178vh, 100vw"
+            decoding="async"
           />
         </div>
 
@@ -164,6 +174,7 @@ export function ImmersiveHouse() {
           {sceneEnabled ? (
             <ShowroomScene
               active={sceneActive}
+              activeRoom={activeRoom}
               compact={compact}
               progress={progressRef}
               reducedMotion={reducedMotion}
@@ -172,7 +183,7 @@ export function ImmersiveHouse() {
           ) : null}
         </div>
 
-        {sceneEnabled && !sceneReady ? (
+        {showSceneLoader ? (
           <div className={styles.sceneLoader} role="status" aria-live="polite">
             <i aria-hidden="true" />
             <span>Preparando o showroom</span>
