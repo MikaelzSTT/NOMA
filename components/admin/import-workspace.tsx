@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CheckSquare, FileSpreadsheet, Link2, ListChecks, ListPlus, LoaderCircle, Upload } from "lucide-react";
+import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 
-type SupplierOption = { id: string; name: string };
+type SupplierOption = { id: string; name: string; supportedMarkets: Market[] };
 type Mapping = Record<string, string>;
 type Template = { id: string; name: string; supplierId: string; columnMapping: Mapping };
 type FilePreview = { type: "CSV" | "XLSX"; columns: string[]; rows: Array<Record<string, unknown>>; totalRows: number; suggestedMapping: Mapping };
@@ -35,7 +36,9 @@ const fieldLabels: Record<string, string> = {
 };
 
 export function ImportWorkspace({ suppliers, templates, recentJobs }: { suppliers: SupplierOption[]; templates: Template[]; recentJobs: Job[] }) {
-  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
+  const [market, setMarket] = useState<Market>("BR");
+  const marketSuppliers = useMemo(() => suppliers.filter((supplier) => supplier.supportedMarkets.includes(market)), [market, suppliers]);
+  const [supplierId, setSupplierId] = useState(marketSuppliers[0]?.id ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [mapping, setMapping] = useState<Mapping>({});
@@ -53,6 +56,12 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
   const [categoryMessage, setCategoryMessage] = useState("");
   const availableTemplates = useMemo(() => templates.filter((template) => template.supplierId === supplierId), [supplierId, templates]);
 
+  function selectMarket(nextMarket: Market) {
+    setMarket(nextMarket);
+    const nextSupplier = suppliers.find((supplier) => supplier.supportedMarkets.includes(nextMarket));
+    setSupplierId(nextSupplier?.id ?? "");
+  }
+
   async function previewFile() {
     if (!file) return setFileMessage("Selecione um arquivo.");
     setBusy(true); setFileMessage("");
@@ -68,7 +77,7 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
     if (!file || !filePreview || !supplierId) return;
     setBusy(true); setFileMessage("");
     const form = new FormData();
-    form.set("file", file); form.set("supplierId", supplierId); form.set("mapping", JSON.stringify(mapping)); form.set("templateName", templateName);
+    form.set("file", file); form.set("supplierId", supplierId); form.set("market", market); form.set("mapping", JSON.stringify(mapping)); form.set("templateName", templateName);
     const response = await fetch("/api/admin/import/file/commit", { method: "POST", body: form });
     const body = await response.json(); setBusy(false);
     setFileMessage(response.ok ? `Importação concluída: ${body.succeeded} sucesso(s), ${body.failed} erro(s).` : body.error ?? "Falha na importação.");
@@ -79,7 +88,7 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
     const response = await fetch("/api/admin/import/url-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls, sourceName }),
+      body: JSON.stringify({ urls, sourceName, market }),
     });
     const body = await response.json();
     if (!response.ok) { setBusy(false); setBatchMessage(body.error ?? "Falha ao criar fila."); return; }
@@ -125,7 +134,7 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
     const response = await fetch("/api/admin/import/category/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: categoryUrl, maxPages }),
+      body: JSON.stringify({ url: categoryUrl, maxPages, market }),
     });
     const body = await response.json(); setBusy(false);
     if (!response.ok) return setCategoryMessage(body.error ?? "Categoria não suportada.");
@@ -156,6 +165,11 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
 
   return (
     <div className="space-y-6">
+      <section className="admin-panel">
+        <label className="admin-field max-w-sm">Mercado de destino<select value={market} onChange={(event) => selectMarket(event.target.value as Market)}>{MARKETS.map((item) => <option key={item} value={item}>{MARKET_CONFIG[item].label}</option>)}</select></label>
+        {marketSuppliers.length === 0 && <p className="mt-3 text-sm text-red-700">Nenhum fornecedor ativo suporta este mercado.</p>}
+      </section>
+
       <section className="admin-panel">
         <div className="mb-5 flex items-start gap-3"><ListPlus className="text-brand" /><div><h2>A. Importar várias URLs</h2><p className="text-sm text-muted">Uma URL por linha. A fila persiste e cada item vira preview antes de salvar no catálogo.</p></div></div>
         <textarea className="w-full" rows={6} value={batchUrls} onChange={(event) => setBatchUrls(event.target.value)} placeholder={"https://fornecedor.example/produto-1\nhttps://fornecedor.example/produto-2"} />
@@ -196,7 +210,7 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
       <section className="admin-panel">
         <div className="mb-5 flex items-start gap-3"><FileSpreadsheet className="text-brand" /><div><h2>C. CSV / XLSX</h2><p className="text-sm text-muted">Use preferencialmente quando o fornecedor disponibilizar catálogo em planilha.</p></div></div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="admin-field">Fornecedor<select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}><option value="">Selecione</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+          <label className="admin-field">Fornecedor<select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}><option value="">Selecione</option>{marketSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
           <label className="admin-field">Arquivo<input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setFilePreview(null); }} /></label>
         </div>
         <button className="button-secondary mt-4" type="button" disabled={busy || !file} onClick={previewFile}>{busy ? <LoaderCircle className="animate-spin" size={17} /> : <Upload size={17} />} Ler colunas</button>

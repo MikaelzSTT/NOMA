@@ -5,12 +5,14 @@ import { upsertCatalogProduct } from "@/lib/catalog/catalog-products";
 import type { NormalizedSupplierProduct, SupplierAdapter } from "@/lib/catalog/supplier-types";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import type { Market } from "@/lib/market";
 import { RequestThrottle } from "@/lib/rate-limit";
 import { slugify } from "@/lib/utils";
 import { normalizedSupplierProductSchema } from "@/lib/validation/catalog-product";
 
 export interface SyncAdapterOptions {
   supplierId?: string;
+  market?: Market;
   operation?: (typeof SyncOperation)[keyof typeof SyncOperation];
   incremental?: boolean;
   batchSize?: number;
@@ -46,6 +48,8 @@ export async function syncSupplierProducts(
   options: SyncAdapterOptions = {},
 ) {
   if (!adapter.fetchProducts) throw new Error(`${adapter.name} não oferece importação de catálogo.`);
+  const market = options.market ?? "BR";
+  if (!supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${supplier.name} não opera no mercado ${market}.`);
   const operation = options.operation ?? (options.incremental ? SyncOperation.INCREMENTAL : SyncOperation.FULL_CATALOG);
   const started = Date.now();
   const lockOwner = await acquireSyncLock(adapter.key);
@@ -80,7 +84,7 @@ export async function syncSupplierProducts(
           continue;
         }
         try {
-          await upsertCatalogProduct(supplier, parsed.data, { preserveManualPrice: true });
+          await upsertCatalogProduct(supplier, parsed.data, { market, preserveManualPrice: true });
           seen.add(parsed.data.supplierProductId);
           succeeded += 1;
         } catch (error) {
@@ -98,6 +102,10 @@ export async function syncSupplierProducts(
     if (operation === SyncOperation.FULL_CATALOG && failed === 0 && seen.size > 0) {
       const result = await db.product.updateMany({
         where: { supplierId: supplier.id, supplierProductId: { notIn: [...seen] }, removedAt: null },
+        data: { availability: "REMOVED", active: false, removedAt: new Date(), syncStatus: "STALE" },
+      });
+      await db.productMarketOffer.updateMany({
+        where: { supplierId: supplier.id, market, supplierProductId: { notIn: [...seen] }, removedAt: null },
         data: { availability: "REMOVED", active: false, removedAt: new Date(), syncStatus: "STALE" },
       });
       removed = result.count;
@@ -143,8 +151,8 @@ async function ensureSupplier(adapter: SupplierAdapter, supplierId?: string) {
   }
   return db.supplier.upsert({
     where: { adapterKey: adapter.key },
-    update: { name: adapter.name, active: true, authorized: true, capabilities: [...adapter.capabilities] },
-    create: { name: adapter.name, slug: slugify(adapter.key), adapterKey: adapter.key, active: true, authorized: true, capabilities: [...adapter.capabilities] },
+    update: { name: adapter.name, active: true, authorized: true, capabilities: [...adapter.capabilities], supportedMarkets: ["BR"] },
+    create: { name: adapter.name, slug: slugify(adapter.key), adapterKey: adapter.key, active: true, authorized: true, capabilities: [...adapter.capabilities], supportedMarkets: ["BR"] },
   });
 }
 

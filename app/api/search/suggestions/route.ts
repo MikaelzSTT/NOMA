@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSearchSuggestions } from "@/lib/catalog";
 import { env } from "@/lib/env";
+import { fallbackMarket, isMarket } from "@/lib/market";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
@@ -14,7 +15,9 @@ export async function GET(request: NextRequest) {
   }
 
   const query = request.nextUrl.searchParams.get("q")?.slice(0, 120) ?? "";
-  const suggestions = await getSearchSuggestions(query);
+  const marketParam = request.nextUrl.searchParams.get("market")?.toUpperCase();
+  const market = isMarket(marketParam) ? marketParam : fallbackMarket();
+  const suggestions = await getSearchSuggestions(query, market);
   return NextResponse.json(suggestions, {
     headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
   });

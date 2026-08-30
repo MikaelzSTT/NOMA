@@ -16,7 +16,10 @@ const environmentSchema = z.object({
     .string()
     .min(1)
     .default("postgresql://vitrineo:vitrineo@localhost:5432/vitrineo?schema=public"),
-  NEXT_PUBLIC_SITE_URL: z.url().default("http://localhost:3000"),
+  NEXT_PUBLIC_SITE_URL: z.preprocess(
+    (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().default("http://localhost:3000"),
+  ),
   SUPPLIER_CONFIG_ENCRYPTION_KEY: optionalSecret(32),
   AUTH_SECRET: optionalSecret(32),
   ADMIN_EMAIL: optionalEmail,

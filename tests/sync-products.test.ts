@@ -12,12 +12,19 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(async () => ({ id: "product-1", slug: "sofa-arco" })),
       update: vi.fn(async () => ({ id: "product-1", slug: "sofa-arco" })),
     },
+    productMarketOffer: {
+      findUnique: vi.fn(async () => null),
+      create: vi.fn(async () => ({ id: "offer-1", slug: "sofa-arco" })),
+      update: vi.fn(async () => ({ id: "offer-1", slug: "sofa-arco" })),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
     priceHistory: { create: vi.fn(async () => ({ id: "price-1" })) },
   };
   const db = {
     syncLog: { create: vi.fn(async () => ({ id: "log-1" })), update: vi.fn(async () => ({ id: "log-1" })) },
-    supplier: { upsert: vi.fn(async () => ({ id: "supplier-1", name: "Teste", adapterKey: "mock-catalog", syncCursor: null })), update: vi.fn(async () => ({ id: "supplier-1" })) },
+    supplier: { upsert: vi.fn(async () => ({ id: "supplier-1", name: "Teste", adapterKey: "mock-catalog", syncCursor: null, supportedMarkets: ["BR"] })), update: vi.fn(async () => ({ id: "supplier-1" })) },
     product: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    productMarketOffer: { updateMany: vi.fn(async () => ({ count: 0 })) },
     syncLock: { updateMany: vi.fn(async () => ({ count: 0 })), create: vi.fn(async () => ({ provider: "mock-catalog" })) },
     $transaction: vi.fn(async (input: unknown) => typeof input === "function" ? input(transaction) : Promise.all(input as Promise<unknown>[])),
   };
@@ -37,6 +44,7 @@ describe("sincronização multi-fornecedor", () => {
     const result = await syncProducts({ adapter: new MockSupplierAdapter(), batchSize: 10 });
     expect(result).toMatchObject({ processed: 6, succeeded: 6, failed: 0 });
     expect(mocks.transaction.product.create).toHaveBeenCalledTimes(6);
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledTimes(6);
     expect(mocks.transaction.priceHistory.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ sellingPrice: 8940, costPrice: expect.any(Number) }) }));
   });
 });

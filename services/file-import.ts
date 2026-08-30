@@ -2,6 +2,7 @@ import "server-only";
 import readXlsxFile from "read-excel-file/node";
 import type { Prisma, Supplier } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import type { Market } from "@/lib/market";
 import { upsertCatalogProduct } from "@/services/catalog-products";
 import type { NormalizedSupplierProduct } from "@/suppliers/types";
 
@@ -89,14 +90,17 @@ export async function importCatalogRows(
   supplier: Supplier,
   rows: ImportRow[],
   mapping: ColumnMapping,
-  options: { fileName: string; fileType: "CSV" | "XLSX"; mappingTemplateId?: string },
+  options: { fileName: string; fileType: "CSV" | "XLSX"; mappingTemplateId?: string; market?: Market },
 ) {
+  const market = options.market ?? "BR";
+  if (!supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${supplier.name} não opera no mercado ${market}.`);
   const job = await db.importJob.create({
     data: {
       type: options.fileType,
       status: "IMPORTING",
       sourceName: options.fileName,
       columnMapping: mapping as Prisma.InputJsonValue,
+      market,
       totalItems: rows.length,
       supplierId: supplier.id,
       mappingTemplateId: options.mappingTemplateId,
@@ -109,7 +113,7 @@ export async function importCatalogRows(
     const item = await db.importItem.create({ data: { jobId: job.id, status: "IMPORTING", rawData: row as Prisma.InputJsonValue, startedAt: new Date() } });
     try {
       const normalized = normalizeMappedRow(row, mapping);
-      const product = await upsertCatalogProduct(supplier, normalized, { manualPriceOverride: normalized.sellingPrice != null });
+      const product = await upsertCatalogProduct(supplier, normalized, { market, manualPriceOverride: normalized.sellingPrice != null });
       succeeded += 1;
       await db.importItem.update({ where: { id: item.id }, data: { status: "SUCCESS", productId: product.id, normalizedData: normalized as unknown as Prisma.InputJsonValue, finishedAt: new Date() } });
     } catch (error) {

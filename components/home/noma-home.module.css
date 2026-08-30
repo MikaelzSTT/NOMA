@@ -153,6 +153,21 @@
   gap: 0.15rem;
 }
 
+.marketSelect {
+  width: auto;
+  min-width: 5.2rem;
+  height: 2.4rem;
+  padding-inline: 0.55rem;
+  border-radius: 999px;
+  color: inherit;
+  letter-spacing: 0;
+}
+
+.marketSelect select {
+  max-width: 7.2rem;
+  color: inherit;
+}
+
 .headerIcon,
 .menuToggle {
   position: relative;

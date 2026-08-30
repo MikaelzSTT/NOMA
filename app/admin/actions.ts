@@ -9,6 +9,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { clearAdminSession, createAdminSession, requireAdmin, validateAdminCredentials } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { isMarket, type Market } from "@/lib/market";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { syncProducts } from "@/services/sync-products";
 import { calculateSellingPrice } from "@/services/pricing";
@@ -63,6 +64,7 @@ export async function runManualSyncAction() {
 
 const editProductSchema = z.object({
   id: z.string().min(1),
+  market: z.string().transform((value) => value.toUpperCase()).refine(isMarket),
   title: z.string().trim().min(2).max(300),
   shortDescription: z.string().trim().max(800).optional(),
   description: z.string().trim().max(30_000).optional(),
@@ -105,7 +107,7 @@ export async function updateInternalProductAction(formData: FormData) {
     featured: formData.get("featured") === "true",
   });
   if (!parsed.success) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=error`);
-  const { id, category: categoryName, brand: brandName, images, ...input } = parsed.data;
+  const { id, market, category: categoryName, brand: brandName, images, ...input } = parsed.data;
   const [category, brand] = await Promise.all([
     db.category.upsert({ where: { slug: slugify(categoryName) }, update: { name: categoryName }, create: { name: categoryName, slug: slugify(categoryName) } }),
     brandName ? db.brand.upsert({ where: { slug: slugify(brandName) }, update: { name: brandName }, create: { name: brandName, slug: slugify(brandName) } }) : null,
@@ -116,34 +118,78 @@ export async function updateInternalProductAction(formData: FormData) {
       ? calculateSellingPrice(input.costPrice, { type: input.pricingRuleType, value: input.pricingRuleValue })
       : input.sellingPrice;
   await db.$transaction(async (transaction) => {
-    const previous = await transaction.product.findUnique({ where: { id }, select: { sellingPrice: true } });
+    const product = await transaction.product.findUnique({ where: { id }, select: { id: true, slug: true, sku: true, supplierId: true, supplierProductId: true, supplier: { select: { id: true, name: true, supportedMarkets: true } } } });
+    if (!product) throw new Error("Produto não encontrado.");
+    if (!product.supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${product.supplier.name} não opera no mercado ${market}.`);
+    const previous = await transaction.productMarketOffer.findFirst({ where: { productId: id, market }, select: { id: true, sellingPrice: true, slug: true } });
     await transaction.product.update({
       where: { id },
       data: {
-        ...input,
+        ...(market === "BR" ? input : { updatedAt: new Date() }),
         shortDescription: input.shortDescription ?? null,
         description: input.description ?? null,
         subcategory: input.subcategory ?? null,
-        costPrice: input.costPrice ?? null,
-        sellingPrice: sellingPrice ?? null,
-        compareAtPrice: input.compareAtPrice ?? null,
-        discountPercent: calculateDiscount(sellingPrice, input.compareAtPrice),
-        shippingCost: input.shippingCost ?? null,
-        estimatedDelivery: input.estimatedDelivery ?? null,
-        pricingRuleType: input.pricingRuleType ?? null,
-        pricingRuleValue: input.pricingRuleValue ?? null,
+        ...(market === "BR" ? {
+          costPrice: input.costPrice ?? null,
+          sellingPrice: sellingPrice ?? null,
+          compareAtPrice: input.compareAtPrice ?? null,
+          discountPercent: calculateDiscount(sellingPrice, input.compareAtPrice),
+          shippingCost: input.shippingCost ?? null,
+          estimatedDelivery: input.estimatedDelivery ?? null,
+          pricingRuleType: input.pricingRuleType ?? null,
+          pricingRuleValue: input.pricingRuleValue ?? null,
+          stock: input.stock,
+          availability: input.availability,
+          manualPriceOverride: input.manualPriceOverride,
+          active: input.active,
+          featured: input.featured,
+          popularityScore: input.popularityScore,
+        } : {}),
         categoryId: category.id,
         brandId: brand?.id ?? null,
-        images: { deleteMany: {}, create: images.map((url, position) => ({ url, sourceUrl: url, storageKey: url.startsWith("/") ? url : null, storageStatus: url.startsWith("/") ? "STORED" : "EXTERNAL", position, isPrimary: position === 0, alt: input.title })) },
+        ...(market === "BR" ? { images: { deleteMany: {}, create: images.map((url, position) => ({ url, sourceUrl: url, storageKey: url.startsWith("/") ? url : null, storageStatus: url.startsWith("/") ? "STORED" : "EXTERNAL", position, isPrimary: position === 0, alt: input.title })) } } : {}),
       },
     });
+    const offerData = {
+      supplierId: product.supplierId,
+      supplierProductId: product.supplierProductId,
+      sku: product.sku,
+      title: market === "US" ? input.title : null,
+      shortDescription: market === "US" ? input.shortDescription ?? null : null,
+      description: market === "US" ? input.description ?? null : null,
+      images: market === "US" ? images.map((url, position) => ({ url, alt: input.title, position, isPrimary: position === 0 })) as Prisma.InputJsonValue : undefined,
+      slug: previous?.slug ?? (market === "BR" ? product.slug : `${product.slug}-us`),
+      currency: input.currency,
+      costPrice: input.costPrice ?? null,
+      sellingPrice: sellingPrice ?? null,
+      compareAtPrice: input.compareAtPrice ?? null,
+      discountPercent: calculateDiscount(sellingPrice, input.compareAtPrice),
+      stockQuantity: input.stock,
+      availability: input.availability,
+      shippingCost: input.shippingCost ?? null,
+      estimatedDelivery: input.estimatedDelivery ?? null,
+      active: input.active,
+      featured: input.featured,
+      popularityScore: input.popularityScore,
+      manualPriceOverride: input.manualPriceOverride,
+      pricingRuleType: input.pricingRuleType ?? null,
+      pricingRuleValue: input.pricingRuleValue ?? null,
+      internalNotes: input.internalNotes ?? null,
+      syncStatus: "SYNCED" as const,
+      lastSyncedAt: new Date(),
+      lastPriceSyncAt: new Date(),
+      lastStockSyncAt: new Date(),
+    };
+    const offer = previous
+      ? await transaction.productMarketOffer.update({ where: { id: previous.id }, data: offerData })
+      : await transaction.productMarketOffer.create({ data: { ...offerData, productId: id, market } });
     if (sellingPrice != null && Number(previous?.sellingPrice) !== sellingPrice) {
-      await transaction.priceHistory.create({ data: { productId: id, sellingPrice, compareAtPrice: previous?.sellingPrice, costPrice: input.costPrice, currency: input.currency } });
+      await transaction.priceHistory.create({ data: { productId: id, productOfferId: offer.id, market, sellingPrice, compareAtPrice: previous?.sellingPrice, costPrice: input.costPrice, currency: input.currency } });
     }
   });
   revalidatePath(`/admin/produtos/${id}`);
   revalidatePath("/", "layout");
-  redirect(`/admin/produtos/${id}?saved=ok`);
+  redirect(`/admin/produtos/${id}?saved=ok&market=${market}`);
 }
 
 export async function toggleProductAction(formData: FormData) {
@@ -172,6 +218,7 @@ const supplierSchema = z.object({
   credentials: z.record(z.string(), z.string()),
   active: z.boolean(),
   authorized: z.boolean(),
+  supportedMarkets: z.array(z.string().transform((value) => value.toUpperCase()).refine(isMarket)).min(1),
 });
 
 export async function saveSupplierAction(formData: FormData) {
@@ -189,16 +236,17 @@ export async function saveSupplierAction(formData: FormData) {
     ...Object.fromEntries(formData), id, settings: rawSettings, credentials,
     active: formData.get("active") === "true",
     authorized: formData.get("authorized") === "true",
+    supportedMarkets: formData.getAll("supportedMarkets"),
   });
   if (!parsed.success) redirect(`/admin/fornecedores?saved=error${id ? `&id=${id}` : ""}`);
   const { credentials: credentialValues, id: supplierId, settings: parsedSettings, ...data } = parsed.data;
   const supplierSettings = parsedSettings as Prisma.InputJsonValue;
   const credentialsEncrypted = Object.keys(credentialValues).length ? encryptSupplierCredentials(credentialValues) : undefined;
   if (supplierId) {
-    await db.supplier.update({ where: { id: supplierId }, data: { ...data, settings: supplierSettings, ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
+    await db.supplier.update({ where: { id: supplierId }, data: { ...data, supportedMarkets: data.supportedMarkets as Market[], settings: supplierSettings, ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
     await db.product.updateMany({ where: { supplierId }, data: { supplierName: data.name } });
   } else {
-    await db.supplier.create({ data: { ...data, settings: supplierSettings, slug: slugify(data.name), ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
+    await db.supplier.create({ data: { ...data, supportedMarkets: data.supportedMarkets as Market[], settings: supplierSettings, slug: slugify(data.name), ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
   }
   revalidatePath("/admin/fornecedores");
   revalidatePath("/admin/importar");

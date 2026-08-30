@@ -2,6 +2,7 @@ import "server-only";
 import type { Supplier } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { decryptSupplierCredentials } from "@/lib/supplier-secrets";
+import type { Market } from "@/lib/market";
 import { MockSupplierAdapter } from "@/suppliers/adapters/mock-supplier-adapter";
 import type { SupplierAdapter, SupplierRuntimeConfig } from "@/suppliers/types";
 
@@ -34,7 +35,7 @@ export function createSupplierAdapter(supplier: Supplier) {
   });
 }
 
-export async function identifySupplierAdapter(rawUrl: string) {
+export async function identifySupplierAdapter(rawUrl: string, market?: Market) {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -43,7 +44,7 @@ export async function identifySupplierAdapter(rawUrl: string) {
   }
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("A URL deve usar HTTP ou HTTPS.");
 
-  const suppliers = await db.supplier.findMany({ where: { active: true, authorized: true } });
+  const suppliers = await db.supplier.findMany({ where: { active: true, authorized: true, ...(market ? { supportedMarkets: { has: market } } : {}) } });
   for (const supplier of suppliers) {
     const factory = factories.get(supplier.adapterKey);
     if (!factory) continue;

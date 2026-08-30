@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
+import type { Market } from "@/lib/market";
 import { normalizedSupplierProductSchema } from "@/lib/validation/catalog-product";
 import { upsertCatalogProduct } from "@/services/catalog-products";
 import { createSupplierAdapter, identifySupplierAdapter } from "@/suppliers/registry";
@@ -12,8 +13,8 @@ interface CommitPreviewInput {
   product: NormalizedSupplierProduct;
 }
 
-export async function previewProductUrl(rawUrl: string) {
-  const { supplier, adapter, url } = await identifySupplierAdapter(rawUrl);
+export async function previewProductUrl(rawUrl: string, market: Market = "BR") {
+  const { supplier, adapter, url } = await identifySupplierAdapter(rawUrl, market);
   if (!adapter.fetchProductByUrl) throw new Error(`${supplier.name} reconhece o domínio, mas não oferece importação por URL.`);
   const product = normalizeImportedProduct(await adapter.fetchProductByUrl(url));
   return {
@@ -22,8 +23,8 @@ export async function previewProductUrl(rawUrl: string) {
   };
 }
 
-export async function discoverCategoryProducts(rawUrl: string, maxPages = 3) {
-  const { supplier, adapter, url } = await identifySupplierAdapter(rawUrl);
+export async function discoverCategoryProducts(rawUrl: string, maxPages = 3, market: Market = "BR") {
+  const { supplier, adapter, url } = await identifySupplierAdapter(rawUrl, market);
   if (!adapter.discoverProducts) throw new Error(`${supplier.name} reconhece o domínio, mas não oferece descoberta de categoria.`);
 
   const products: DiscoveredSupplierProduct[] = [];
@@ -53,21 +54,23 @@ export async function discoverCategoryProducts(rawUrl: string, maxPages = 3) {
   };
 }
 
-export async function confirmUrlProduct(supplierId: string, candidate: NormalizedSupplierProduct) {
+export async function confirmUrlProduct(supplierId: string, candidate: NormalizedSupplierProduct, market: Market = "BR") {
   const supplier = await db.supplier.findUnique({ where: { id: supplierId } });
   if (!supplier || !supplier.active || !supplier.authorized) throw new Error("Fornecedor indisponível ou não autorizado.");
+  if (!supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${supplier.name} não opera no mercado ${market}.`);
   const product = normalizeImportedProduct(candidate);
   const adapter = createSupplierAdapter(supplier);
   if (product.sourceUrl && adapter.supportsUrl && !adapter.supportsUrl(new URL(product.sourceUrl))) {
     throw new Error("A URL de origem não pertence ao adapter selecionado.");
   }
-  const saved = await upsertCatalogProduct(supplier, product, { manualPriceOverride: product.sellingPrice != null });
+  const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: product.sellingPrice != null });
   await db.importJob.create({
     data: {
       type: "URL",
       status: "SUCCESS",
       sourceName: product.sourceUrl,
       supplierId: supplier.id,
+      market,
       totalItems: 1,
       processedItems: 1,
       successItems: 1,
@@ -79,13 +82,14 @@ export async function confirmUrlProduct(supplierId: string, candidate: Normalize
   return { id: saved.id, slug: saved.slug };
 }
 
-export async function createUrlImportJob(urls: string[], options: { sourceName?: string } = {}) {
+export async function createUrlImportJob(urls: string[], options: { sourceName?: string; market?: Market } = {}) {
+  const market = options.market ?? "BR";
   const unique = [...new Set(urls.map((url) => normalizeSourceUrl(url)).filter(Boolean))].slice(0, 500) as string[];
   if (unique.length === 0) throw new Error("Informe ao menos uma URL.");
   const items: Array<{ sourceRef: string; status: "PENDING" | "ERROR"; error?: string }> = [];
   for (const url of unique) {
     try {
-      await identifySupplierAdapter(url);
+      await identifySupplierAdapter(url, market);
       items.push({ sourceRef: url, status: "PENDING" });
     } catch (error) {
       items.push({ sourceRef: url, status: "ERROR", error: cleanError(error) });
@@ -96,6 +100,7 @@ export async function createUrlImportJob(urls: string[], options: { sourceName?:
       type: "URL_BATCH",
       status: items.some((item) => item.status === "PENDING") ? "PENDING" : "ERROR",
       sourceName: options.sourceName ?? "Lista de URLs",
+      market,
       totalItems: items.length,
       processedItems: items.filter((item) => item.status === "ERROR").length,
       errorItems: items.filter((item) => item.status === "ERROR").length,
@@ -106,14 +111,14 @@ export async function createUrlImportJob(urls: string[], options: { sourceName?:
 }
 
 export async function processUrlImportJob(jobId: string, batchSize = 3) {
-  const job = await db.importJob.findFirst({ where: { id: jobId, type: "URL_BATCH" }, select: { id: true } });
+  const job = await db.importJob.findFirst({ where: { id: jobId, type: "URL_BATCH" }, select: { id: true, market: true } });
   if (!job) throw new Error("Fila de importação não encontrada.");
   await db.importJob.update({ where: { id: jobId }, data: { status: "IMPORTING", startedAt: new Date() } });
   const items = await db.importItem.findMany({ where: { jobId, status: "PENDING" }, orderBy: { createdAt: "asc" }, take: Math.max(1, Math.min(batchSize, 10)) });
   for (const item of items) {
     await db.importItem.update({ where: { id: item.id }, data: { status: "IMPORTING", startedAt: new Date(), attempts: { increment: 1 } } });
     try {
-      const { supplier, adapter, url } = await identifySupplierAdapter(item.sourceRef ?? "");
+      const { supplier, adapter, url } = await identifySupplierAdapter(item.sourceRef ?? "", job.market as Market);
       if (!adapter.fetchProductByUrl) throw new Error("O adapter não oferece importação por URL.");
       const product = normalizeImportedProduct(await adapter.fetchProductByUrl(url));
       await db.importItem.update({
@@ -139,7 +144,7 @@ export async function commitImportJobPreviews(jobId: string, inputs: CommitPrevi
   for (const input of inputs.slice(0, 500)) {
     const item = await db.importItem.findFirst({
       where: { id: input.itemId, jobId, status: "PREVIEW" },
-      select: { id: true, sourceRef: true },
+      select: { id: true, sourceRef: true, job: { select: { market: true } } },
     });
     if (!item) throw new Error("Preview não encontrado ou já processado.");
     await db.importItem.update({ where: { id: item.id }, data: { status: "IMPORTING", startedAt: new Date(), attempts: { increment: 1 } } });
@@ -148,8 +153,9 @@ export async function commitImportJobPreviews(jobId: string, inputs: CommitPrevi
         ...input.product,
         sourceUrl: input.product.sourceUrl ?? item.sourceRef ?? undefined,
       });
-      const { supplier } = await identifySupplierAdapter(product.sourceUrl ?? item.sourceRef ?? "");
-      const saved = await upsertCatalogProduct(supplier, product, { manualPriceOverride: product.sellingPrice != null });
+      const market = item.job.market as Market;
+      const { supplier } = await identifySupplierAdapter(product.sourceUrl ?? item.sourceRef ?? "", market);
+      const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: product.sellingPrice != null });
       savedProducts.push({ id: saved.id, slug: saved.slug });
       await db.importItem.update({
         where: { id: item.id },

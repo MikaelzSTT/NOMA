@@ -23,8 +23,8 @@ export function calculateDiscount(
   return Math.round(((compareAtPrice - sellingPrice) / compareAtPrice) * 10_000) / 100;
 }
 
-export function formatMoney(value: number | string | { toString(): string }, currency = "BRL") {
-  return new Intl.NumberFormat("pt-BR", {
+export function formatMoney(value: number | string | { toString(): string }, currency = "BRL", locale?: string) {
+  return new Intl.NumberFormat(locale ?? (currency === "USD" ? "en-US" : "pt-BR"), {
     style: "currency",
     currency,
   }).format(Number(value));
@@ -38,7 +38,13 @@ export function formatDate(value: Date | string) {
 }
 
 export function absoluteUrl(path = "") {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const rawBase = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
+  let base = "http://localhost:3000";
+  try {
+    base = new URL(rawBase).toString();
+  } catch {
+    base = "http://localhost:3000";
+  }
   return new URL(path, base).toString();
 }
 

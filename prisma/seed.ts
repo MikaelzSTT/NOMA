@@ -8,8 +8,8 @@ async function seed() {
   const adapter = new MockSupplierAdapter();
   const supplier = await db.supplier.upsert({
     where: { adapterKey: adapter.key },
-    update: { name: adapter.name, active: true, authorized: true, capabilities: [...adapter.capabilities] },
-    create: { name: adapter.name, slug: slugify(adapter.key), adapterKey: adapter.key, active: true, authorized: true, capabilities: [...adapter.capabilities] },
+    update: { name: adapter.name, active: true, authorized: true, capabilities: [...adapter.capabilities], supportedMarkets: ["BR"] },
+    create: { name: adapter.name, slug: slugify(adapter.key), adapterKey: adapter.key, active: true, authorized: true, capabilities: [...adapter.capabilities], supportedMarkets: ["BR"] },
   });
   const existingRule = await db.pricingRule.findFirst({ where: { supplierId: supplier.id, name: "Markup demonstrativo 1.8" } });
   if (!existingRule) {
@@ -20,7 +20,7 @@ async function seed() {
     await db.supplier.update({ where: { id: legacyMock.id }, data: { active: false } });
     await db.product.updateMany({ where: { supplierId: legacyMock.id }, data: { active: false, archivedAt: new Date() } });
   }
-  const result = await syncProductsWithAdapter(adapter, { supplierId: supplier.id });
+  const result = await syncProductsWithAdapter(adapter, { supplierId: supplier.id, market: "BR" });
   console.info(`Seed concluído: ${result.succeeded} produtos, ${result.failed} erros, ${result.durationMs}ms.`);
 }
 

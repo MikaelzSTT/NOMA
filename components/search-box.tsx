@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Clock3, Search, X } from "lucide-react";
+import { MARKET_CONFIG, productPath, searchPath, type Market } from "@/lib/market";
 import { formatMoney } from "@/lib/utils";
 
 interface Suggestion {
@@ -15,7 +16,8 @@ interface Suggestion {
 
 const HISTORY_KEY = "vitrineo:recent-searches";
 
-export function SearchBox() {
+export function SearchBox({ market }: { market: Market }) {
+  const config = MARKET_CONFIG[market];
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [history, setHistory] = useState<string[]>(() => {
@@ -34,7 +36,7 @@ export function SearchBox() {
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/search/suggestions?q=${encodeURIComponent(query)}`, {
+        const response = await fetch(`/api/search/suggestions?market=${market}&q=${encodeURIComponent(query)}`, {
           signal: controller.signal,
         });
         if (response.ok) setSuggestions(await response.json());
@@ -46,7 +48,7 @@ export function SearchBox() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [query]);
+  }, [market, query]);
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -65,7 +67,7 @@ export function SearchBox() {
   return (
     <div ref={wrapperRef} className="relative w-full">
       <form
-        action="/buscar"
+        action={searchPath(market)}
         role="search"
         className="search-shell"
         onSubmit={() => query.trim() && remember(query)}
@@ -80,17 +82,17 @@ export function SearchBox() {
             if (value.trim().length < 2) setSuggestions([]);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Busque por produto, marca ou categoria"
+          placeholder={market === "US" ? "Search by product, brand, or category" : "Busque por produto, marca ou categoria"}
           autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
-          aria-label="Buscar produtos"
+          aria-label={market === "US" ? "Search products" : "Buscar produtos"}
         />
         {query && (
           <button type="button" onClick={() => setQuery("")} className="icon-button" aria-label="Limpar busca">
             <X size={17} aria-hidden="true" />
           </button>
         )}
-        <button className="search-button" type="submit">Buscar</button>
+        <button className="search-button" type="submit">{market === "US" ? "Search" : "Buscar"}</button>
       </form>
 
       {open && (suggestions.length > 0 || (!query && history.length > 0)) && (
@@ -100,7 +102,7 @@ export function SearchBox() {
               {suggestions.map((item) => (
                 <li key={item.slug}>
                   <a
-                    href={`/produto/${item.slug}`}
+                    href={productPath(market, item.slug)}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-surface"
                     onClick={() => remember(item.title)}
                   >
@@ -112,7 +114,7 @@ export function SearchBox() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-ink">{item.title}</span>
                       {item.sellingPrice != null && (
-                        <span className="text-xs font-bold text-brand">{formatMoney(item.sellingPrice, item.currency)}</span>
+                        <span className="text-xs font-bold text-brand">{formatMoney(item.sellingPrice, item.currency, config.locale)}</span>
                       )}
                     </span>
                   </a>
@@ -121,9 +123,9 @@ export function SearchBox() {
             </ul>
           ) : (
             <div className="p-2">
-              <p className="px-3 py-2 text-xs font-bold uppercase text-muted">Buscas recentes</p>
+              <p className="px-3 py-2 text-xs font-bold uppercase text-muted">{market === "US" ? "Recent searches" : "Buscas recentes"}</p>
               {history.map((item) => (
-                <a key={item} href={`/buscar?q=${encodeURIComponent(item)}`} className="flex items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-surface">
+                <a key={item} href={`${searchPath(market)}?q=${encodeURIComponent(item)}`} className="flex items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-surface">
                   <Clock3 size={15} className="text-muted" aria-hidden="true" /> {item}
                 </a>
               ))}

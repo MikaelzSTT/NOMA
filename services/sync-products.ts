@@ -22,7 +22,8 @@ export async function syncProducts(options: SyncOptions = {}): Promise<SyncResul
     return syncProductsWithAdapter(options.adapter, options);
   }
 
-  const suppliers = await db.supplier.findMany({ where: { active: true, authorized: true } });
+  const market = options.market ?? "BR";
+  const suppliers = await db.supplier.findMany({ where: { active: true, authorized: true, supportedMarkets: { has: market } } });
   if (suppliers.length === 0) throw new Error("Nenhum fornecedor ativo e autorizado foi configurado.");
 
   const results: SyncResult[] = [];

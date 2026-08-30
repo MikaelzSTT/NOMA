@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireApiAdmin } from "@/lib/api-auth";
+import { isMarket } from "@/lib/market";
 import { INTERNAL_IMPORT_FIELDS, importCatalogRows, parseCatalogFile, type ColumnMapping } from "@/services/file-import";
 
 export const runtime = "nodejs";
@@ -15,13 +16,15 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file");
     const supplierId = String(form.get("supplierId") ?? "");
+    const marketValue = String(form.get("market") ?? "").toUpperCase();
+    if (!isMarket(marketValue)) throw new Error("Escolha um mercado válido.");
     const templateName = String(form.get("templateName") ?? "").trim().slice(0, 120);
     const mapping = mappingSchema.parse(JSON.parse(String(form.get("mapping") ?? "{}"))) as ColumnMapping;
     if (!(file instanceof File)) throw new Error("Selecione um arquivo CSV ou XLSX.");
     if (!Object.values(mapping).includes("title") || (!Object.values(mapping).includes("sku") && !Object.values(mapping).includes("supplierProductId"))) {
       throw new Error("Mapeie ao menos título e SKU/ID do fornecedor.");
     }
-    const supplier = await db.supplier.findFirst({ where: { id: supplierId, active: true } });
+    const supplier = await db.supplier.findFirst({ where: { id: supplierId, active: true, supportedMarkets: { has: marketValue } } });
     if (!supplier) throw new Error("Fornecedor não encontrado.");
     const parsed = await parseCatalogFile(file);
     const template = templateName ? await db.importMappingTemplate.upsert({
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
       update: { fileType: parsed.type, columnMapping: mapping as Prisma.InputJsonValue },
       create: { supplierId, name: templateName, fileType: parsed.type, columnMapping: mapping as Prisma.InputJsonValue },
     }) : null;
-    const result = await importCatalogRows(supplier, parsed.rows, mapping, { fileName: file.name, fileType: parsed.type, mappingTemplateId: template?.id });
+    const result = await importCatalogRows(supplier, parsed.rows, mapping, { fileName: file.name, fileType: parsed.type, mappingTemplateId: template?.id, market: marketValue });
     return Response.json(result);
   } catch (error) {
     return Response.json({ error: message(error) }, { status: 400 });

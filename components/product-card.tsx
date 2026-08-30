@@ -2,10 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight, ImageIcon } from "lucide-react";
 import type { CatalogProduct } from "@/lib/catalog";
+import { MARKET_CONFIG, productPath, type Market } from "@/lib/market";
 import { formatMoney } from "@/lib/utils";
 import { Rating } from "@/components/rating";
 
-export function ProductCard({ product }: { product: CatalogProduct }) {
+export function ProductCard({ product, market = product.market }: { product: CatalogProduct; market?: Market }) {
+  const config = MARKET_CONFIG[market];
   const image = product.images[0];
   const discount = product.discountPercent ? Math.round(Number(product.discountPercent)) : 0;
   const spriteColumn = Number(product.attributes.spriteColumn);
@@ -14,7 +16,7 @@ export function ProductCard({ product }: { product: CatalogProduct }) {
 
   return (
     <article className="product-card group">
-      <Link href={`/produto/${product.slug}`} className="block" aria-label={product.title}>
+      <Link href={productPath(market, product.slug)} className="block" aria-label={product.title}>
         <div className="relative aspect-square overflow-hidden bg-white">
           {isSprite ? (
             <div
@@ -49,15 +51,15 @@ export function ProductCard({ product }: { product: CatalogProduct }) {
           <div className="mt-2"><Rating value={product.rating ? Number(product.rating) : null} count={product.reviewCount} /></div>
           <div className="mt-auto pt-3">
             {product.compareAtPrice && product.sellingPrice && product.compareAtPrice > product.sellingPrice && (
-              <p className="text-xs text-muted line-through">{formatMoney(product.compareAtPrice, product.currency)}</p>
+              <p className="text-xs text-muted line-through">{formatMoney(product.compareAtPrice, product.currency, config.locale)}</p>
             )}
             {product.sellingPrice ? (
-              <p className="text-lg font-extrabold text-ink sm:text-xl">{formatMoney(product.sellingPrice, product.currency)}</p>
+              <p className="text-lg font-extrabold text-ink sm:text-xl">{formatMoney(product.sellingPrice, product.currency, config.locale)}</p>
             ) : (
-              <p className="text-sm font-bold text-muted">Preco indisponivel</p>
+              <p className="text-sm font-bold text-muted">{market === "US" ? "Price unavailable" : "Preco indisponivel"}</p>
             )}
             <p className="mt-1 flex items-center gap-1 text-xs font-bold text-brand">
-              Ver oferta <ArrowUpRight size={13} aria-hidden="true" />
+              {market === "US" ? "View offer" : "Ver oferta"} <ArrowUpRight size={13} aria-hidden="true" />
             </p>
           </div>
         </div>

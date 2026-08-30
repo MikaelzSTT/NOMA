@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Menu, Search, ShoppingBag, UserRound, X } from "lucide-react";
+import { MarketSwitcher } from "@/components/market-switcher";
+import type { Market } from "@/lib/market";
 import styles from "./noma-home.module.css";
 
 const links = [
@@ -10,7 +12,17 @@ const links = [
   { href: "#sobre", label: "Sobre" },
 ];
 
-export function HomeHeader() {
+export function HomeHeader({ market }: { market: Market }) {
+  const isUS = market === "US";
+  const navLinks = isUS
+    ? [
+        { href: "#ambientes", label: "Rooms" },
+        { href: "#colecoes", label: "Collections" },
+        { href: "#planejados", label: "Custom" },
+        { href: "#inspiracao", label: "Inspiration" },
+        { href: "#sobre", label: "About" },
+      ]
+    : links;
   return (
     <header
       className={styles.header}
@@ -24,7 +36,7 @@ export function HomeHeader() {
         </Link>
 
         <nav className={styles.desktopNav} aria-label="Navegação principal">
-          {links.map((link) => (
+          {navLinks.map((link) => (
             <Link key={link.href} href={link.href}>
               {link.label}
             </Link>
@@ -32,6 +44,7 @@ export function HomeHeader() {
         </nav>
 
         <div className={styles.headerActions} aria-label="Ações rápidas">
+          <MarketSwitcher market={market} className={styles.marketSelect} />
           <button type="button" aria-label="Pesquisar" className={styles.headerIcon}>
             <Search aria-hidden="true" size={18} />
           </button>
@@ -58,14 +71,14 @@ export function HomeHeader() {
 
       <div className={styles.mobileMenu} id="noma-mobile-menu">
         <nav aria-label="Navegação móvel">
-          {links.map((link, index) => (
+          {navLinks.map((link, index) => (
             <Link key={link.href} href={link.href} data-menu-link>
               <span>0{index + 1}</span>
               {link.label}
             </Link>
           ))}
         </nav>
-        <p>Interiores, mobiliário e marcenaria sob medida.</p>
+        <p>{isUS ? "Interiors, furniture, and custom millwork." : "Interiores, mobiliário e marcenaria sob medida."}</p>
       </div>
     </header>
   );

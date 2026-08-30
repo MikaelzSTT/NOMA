@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 export default async function AdminImportPage() {
   await requireAdmin();
   const [suppliers, templates, recentJobs] = await Promise.all([
-    db.supplier.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.supplier.findMany({ where: { active: true }, select: { id: true, name: true, supportedMarkets: true }, orderBy: { name: "asc" } }),
     db.importMappingTemplate.findMany({ select: { id: true, name: true, supplierId: true, columnMapping: true }, orderBy: { updatedAt: "desc" } }),
     db.importJob.findMany({ where: { type: "URL_BATCH" }, select: { id: true, status: true, totalItems: true, processedItems: true, successItems: true, errorItems: true }, orderBy: { createdAt: "desc" }, take: 8 }),
   ]);
