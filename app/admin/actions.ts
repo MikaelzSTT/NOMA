@@ -9,12 +9,13 @@ import type { Prisma } from "@/generated/prisma/client";
 import { clearAdminSession, createAdminSession, requireAdmin, validateAdminCredentials } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
-import { isMarket, type Market } from "@/lib/market";
+import { MARKET_CONFIG, isMarket, type Market } from "@/lib/market";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { syncProducts } from "@/services/sync-products";
 import { calculateSellingPrice } from "@/services/pricing";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
+import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
 
 export interface LoginState { error?: string }
 
@@ -62,31 +63,102 @@ export async function runManualSyncAction() {
   redirect(`/admin?sync=ok&processed=${processed}`);
 }
 
+const sourceUrl = z.string().trim().url().refine((value) => {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}, "Use uma URL HTTP/HTTPS.");
+
+const imageUrl = z.string().trim().min(1).refine((value) => {
+  if (value.startsWith("/")) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}, "Use HTTPS ou caminho local iniciado por /.");
+
+const optionalMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional());
+const requiredMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative());
+
+const createManualProductSchema = z.object({
+  market: z.string().transform((value) => value.toUpperCase()).refine(isMarket),
+  supplierId: z.string().trim().min(1),
+  sourceUrl,
+  title: z.string().trim().min(2).max(300),
+  slug: z.string().trim().min(2).max(180).transform(slugify).refine((value) => value.length >= 2),
+  description: z.string().trim().max(30_000).optional(),
+  category: z.string().trim().min(2).max(120),
+  images: z.array(imageUrl).min(1).max(30),
+  costPrice: requiredMoney,
+  sellingPrice: requiredMoney,
+  compareAtPrice: optionalMoney,
+  stock: z.coerce.number().int().nonnegative(),
+  availability: z.enum(["AVAILABLE", "OUT_OF_STOCK"]),
+  estimatedDeliveryMinDays: z.coerce.number().int().nonnegative(),
+  estimatedDeliveryMaxDays: z.coerce.number().int().nonnegative(),
+  featured: z.boolean().default(false),
+  active: z.boolean().default(false),
+}).refine((value) => value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
+  path: ["estimatedDeliveryMaxDays"],
+});
+
+export async function createManualProductAction(formData: FormData) {
+  await requireAdmin();
+  const parsed = createManualProductSchema.safeParse({
+    ...Object.fromEntries(formData),
+    description: String(formData.get("description") ?? "").trim() || undefined,
+    images: String(formData.get("images") ?? "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+    featured: formData.get("featured") === "true",
+    active: formData.get("active") === "true",
+  });
+  if (!parsed.success) redirect("/admin/produtos/novo?saved=error");
+
+  let created: Awaited<ReturnType<typeof createManualProduct>>;
+  try {
+    created = await createManualProduct(parsed.data);
+  } catch (error) {
+    const code = error instanceof ManualProductError ? error.code : "error";
+    redirect(`/admin/produtos/novo?saved=${code}`);
+  }
+
+  revalidatePath("/admin/produtos");
+  revalidatePath("/", "layout");
+  redirect(`/admin/produtos/${created.productId}?saved=created&market=${created.market}`);
+}
+
 const editProductSchema = z.object({
   id: z.string().min(1),
   market: z.string().transform((value) => value.toUpperCase()).refine(isMarket),
   title: z.string().trim().min(2).max(300),
+  sourceUrl: sourceUrl.optional(),
   shortDescription: z.string().trim().max(800).optional(),
   description: z.string().trim().max(30_000).optional(),
   category: z.string().trim().min(2).max(120),
   subcategory: z.string().trim().max(120).optional(),
   brand: z.string().trim().max(120).optional(),
-  costPrice: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional()),
-  sellingPrice: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional()),
-  compareAtPrice: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional()),
-  currency: z.string().trim().length(3).transform((value) => value.toUpperCase()),
+  costPrice: optionalMoney,
+  sellingPrice: optionalMoney,
+  compareAtPrice: optionalMoney,
   stock: z.coerce.number().int().nonnegative(),
   availability: z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]),
-  shippingCost: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional()),
+  shippingCost: optionalMoney,
   estimatedDelivery: z.string().trim().max(300).optional(),
+  estimatedDeliveryMinDays: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional()),
+  estimatedDeliveryMaxDays: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional()),
   pricingRuleType: z.enum(["FIXED_MARGIN", "MARKUP"]).optional(),
-  pricingRuleValue: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional()),
+  pricingRuleValue: optionalMoney,
   manualPriceOverride: z.boolean().default(false),
-  images: z.array(z.string().trim().min(1).refine((value) => value.startsWith("/") || /^https?:\/\//.test(value), "URL de imagem inválida")).max(30),
+  images: z.array(imageUrl).max(30),
   internalNotes: z.string().trim().max(2_000).optional(),
   popularityScore: z.coerce.number().int().min(0).max(1_000_000),
   active: z.coerce.boolean().default(false),
   featured: z.coerce.boolean().default(false),
+}).refine((value) => value.estimatedDeliveryMaxDays == null || value.estimatedDeliveryMinDays == null || value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
+  path: ["estimatedDeliveryMaxDays"],
 });
 
 export async function updateInternalProductAction(formData: FormData) {
@@ -94,6 +166,7 @@ export async function updateInternalProductAction(formData: FormData) {
   const raw = Object.fromEntries(formData);
   const parsed = editProductSchema.safeParse({
     ...raw,
+    sourceUrl: String(formData.get("sourceUrl") ?? "").trim() || undefined,
     shortDescription: String(formData.get("shortDescription") ?? "").trim() || undefined,
     description: String(formData.get("description") ?? "").trim() || undefined,
     subcategory: String(formData.get("subcategory") ?? "").trim() || undefined,
@@ -107,7 +180,17 @@ export async function updateInternalProductAction(formData: FormData) {
     featured: formData.get("featured") === "true",
   });
   if (!parsed.success) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=error`);
-  const { id, market, category: categoryName, brand: brandName, images, ...input } = parsed.data;
+  const {
+    id,
+    market,
+    category: categoryName,
+    brand: brandName,
+    images,
+    estimatedDeliveryMinDays,
+    estimatedDeliveryMaxDays,
+    ...input
+  } = parsed.data;
+  const currency = MARKET_CONFIG[market].currency;
   const [category, brand] = await Promise.all([
     db.category.upsert({ where: { slug: slugify(categoryName) }, update: { name: categoryName }, create: { name: categoryName, slug: slugify(categoryName) } }),
     brandName ? db.brand.upsert({ where: { slug: slugify(brandName) }, update: { name: brandName }, create: { name: brandName, slug: slugify(brandName) } }) : null,
@@ -130,6 +213,7 @@ export async function updateInternalProductAction(formData: FormData) {
         description: input.description ?? null,
         subcategory: input.subcategory ?? null,
         ...(market === "BR" ? {
+          currency,
           costPrice: input.costPrice ?? null,
           sellingPrice: sellingPrice ?? null,
           compareAtPrice: input.compareAtPrice ?? null,
@@ -159,7 +243,7 @@ export async function updateInternalProductAction(formData: FormData) {
       description: market === "US" ? input.description ?? null : null,
       images: market === "US" ? images.map((url, position) => ({ url, alt: input.title, position, isPrimary: position === 0 })) as Prisma.InputJsonValue : undefined,
       slug: previous?.slug ?? (market === "BR" ? product.slug : `${product.slug}-us`),
-      currency: input.currency,
+      currency,
       costPrice: input.costPrice ?? null,
       sellingPrice: sellingPrice ?? null,
       compareAtPrice: input.compareAtPrice ?? null,
@@ -168,6 +252,9 @@ export async function updateInternalProductAction(formData: FormData) {
       availability: input.availability,
       shippingCost: input.shippingCost ?? null,
       estimatedDelivery: input.estimatedDelivery ?? null,
+      estimatedDeliveryMinDays: estimatedDeliveryMinDays ?? null,
+      estimatedDeliveryMaxDays: estimatedDeliveryMaxDays ?? null,
+      sourceUrl: input.sourceUrl ?? null,
       active: input.active,
       featured: input.featured,
       popularityScore: input.popularityScore,
@@ -184,7 +271,7 @@ export async function updateInternalProductAction(formData: FormData) {
       ? await transaction.productMarketOffer.update({ where: { id: previous.id }, data: offerData })
       : await transaction.productMarketOffer.create({ data: { ...offerData, productId: id, market } });
     if (sellingPrice != null && Number(previous?.sellingPrice) !== sellingPrice) {
-      await transaction.priceHistory.create({ data: { productId: id, productOfferId: offer.id, market, sellingPrice, compareAtPrice: previous?.sellingPrice, costPrice: input.costPrice, currency: input.currency } });
+      await transaction.priceHistory.create({ data: { productId: id, productOfferId: offer.id, market, sellingPrice, compareAtPrice: input.compareAtPrice, costPrice: input.costPrice, currency } });
     }
   });
   revalidatePath(`/admin/produtos/${id}`);

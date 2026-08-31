@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Archive, Pencil, Search } from "lucide-react";
+import { Archive, Pencil, Plus, Search } from "lucide-react";
 import type { Prisma } from "@/generated/prisma/client";
 import { archiveProductAction, toggleProductAction } from "@/app/admin/actions";
 import { requireAdmin } from "@/lib/auth";
@@ -44,7 +44,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
 
   return (
     <div className="admin-page">
-      <div className="admin-heading"><div><p className="eyebrow">Catálogo</p><h1>Produtos</h1><p>Custos são internos; somente o preço de venda chega à vitrine pública.</p></div><Link href="/admin/importar" className="button-primary">Importar produtos</Link></div>
+      <div className="admin-heading"><div><p className="eyebrow">Catálogo</p><h1>Produtos</h1><p>Custos são internos; somente o preço de venda chega à vitrine pública.</p></div><div className="flex flex-wrap gap-3"><Link href="/admin/produtos/novo" className="button-primary"><Plus size={17} /> Adicionar produto manualmente</Link><Link href="/admin/importar" className="button-secondary">Importar produtos</Link></div></div>
       {raw.archived === "ok" && <div className="admin-alert success">Produto arquivado. Ele pode ser localizado pelo filtro “Arquivados”.</div>}
       <form className="admin-search flex-wrap">
         <Search size={18} /><input name="q" defaultValue={query} placeholder="Título, SKU ou ID do fornecedor" />
