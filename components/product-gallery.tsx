@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ImageIcon } from "lucide-react";
+import { imagesWithFeaturedVariant } from "@/lib/product-gallery-images";
 
-export function ProductGallery({ images, name, sprite }: { images: Array<{ id: string; url: string; alt: string | null }>; name: string; sprite?: { column: number; row: number } }) {
+export function ProductGallery({ images, name, sprite, featuredImageUrl }: { images: Array<{ id: string; url: string; alt: string | null }>; name: string; sprite?: { column: number; row: number }; featuredImageUrl?: string | null }) {
   const [selected, setSelected] = useState(0);
-  const current = images[selected];
+  const visibleImages = useMemo(() => imagesWithFeaturedVariant(images, name, featuredImageUrl), [featuredImageUrl, images, name]);
+  const current = visibleImages[selected];
 
   return (
     <div className="product-gallery">
@@ -19,9 +21,9 @@ export function ProductGallery({ images, name, sprite }: { images: Array<{ id: s
           <div className="grid h-full place-items-center text-border-strong"><ImageIcon size={52} /></div>
         )}
       </div>
-      {images.length > 1 && (
+      {visibleImages.length > 1 && (
         <div className="mt-3 flex gap-2 overflow-x-auto">
-          {images.map((image, index) => (
+          {visibleImages.map((image, index) => (
             <button key={image.id} onClick={() => setSelected(index)} className="relative size-16 shrink-0 overflow-hidden rounded-sm border bg-white data-[active=true]:border-brand" data-active={selected === index} aria-label={`Ver imagem ${index + 1}`}>
               <Image src={image.url} alt="" fill sizes="64px" className="object-cover" />
             </button>

@@ -228,7 +228,7 @@ function previewToVariants(product: ProductUrlImportPreview, fallbackCurrency: s
       active: availability !== "OUT_OF_STOCK",
       availability,
       sourceUrl: variant.sourceUrl ?? product.canonicalUrl ?? product.sourceUrl,
-      imageUrl: variant.imageUrl ?? product.images[0]?.url,
+      imageUrl: variant.imageUrl ?? (hasSourceVariants ? undefined : product.images[0]?.url),
       sourcePriceMissing: hasSourceVariants && variant.sourcePrice == null,
       isDefault: index === 0,
     };

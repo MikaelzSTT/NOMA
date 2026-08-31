@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { colchoesAcordeBemAdapter } from "@/lib/product-import/adapters/colchoes-acorde-bem";
 import { parseProductHtmlWithAdapters, validatePublicProductUrl } from "@/lib/product-import/url-importer";
 
 const baseUrl = new URL("https://loja.example/produto/sofa");
@@ -124,6 +125,40 @@ describe("importação de produto por URL", () => {
     expect(preview.variants[1]).toMatchObject({ availability: "OUT_OF_STOCK", sourcePrice: 1125 });
   });
 
+  it("normaliza mojibake da Acorde Bem em texto de produto e atributos", () => {
+    const preview = parseProductHtmlWithAdapters(`
+      <script>
+        dataLayer = [{
+          "pageCategory":"Produto",
+          "idProduct":"326",
+          "nameProduct":"Sleep Max D45 Colch�o Castor",
+          "description":"Descri��o do colch�o em espuma.",
+          "category":"Colch�o",
+          "priceSell":1025,
+          "price":1388.39,
+          "brand":"Castor",
+          "availability":"YES",
+          "urlImage":"https://images.tcdn.com.br/img/img_prod/573513/colchao_326_1.jpg",
+          "listSku":[
+            {"idSku":"326-17901","nameSku":"Medida: Colch�o De Espuma 078x188x15cm","price":1388.39,"sellPrice":1025,"availability":"YES","urlImage":""}
+          ],
+          "breadcrumbDetails":[{"id":481,"name":"Colch�o","level":1}]
+        }]
+      </script>
+    `, new URL("https://www.colchoesacordebem.com.br/produto/x"));
+
+    expect(preview.title).toBe("Sleep Max D45 Colchão Castor");
+    expect(preview.description).toBe("Descrição do colchão em espuma.");
+    expect(preview.category).toBe("Colchão");
+    expect(preview.variants[0]).toMatchObject({
+      label: "Medida: Colchão De Espuma 078x188x15cm",
+      sku: "326-17901",
+      sourcePrice: 1025,
+      compareAtPrice: 1388.39,
+      attributes: { medida: "Colchão De Espuma 078x188x15cm", dimensoes: "078x188x15" },
+    });
+  });
+
   it("não replica o preço global da Acorde Bem para variantes sem preço individual seguro", () => {
     const preview = parseProductHtmlWithAdapters(`
       <meta property="og:image" content="https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg">
@@ -153,13 +188,104 @@ describe("importação de produto por URL", () => {
     `, new URL("https://www.colchoesacordebem.com.br/produto/vegas?variant_id=7277"));
 
     expect(preview.variants).toHaveLength(2);
-    expect(preview.variants[0]).toMatchObject({ sku: "1417-7265", sourcePrice: undefined, compareAtPrice: 4437.9 });
-    expect(preview.variants[1]).toMatchObject({ sku: "1417-7277", sourcePrice: 6696.9, compareAtPrice: 7760.08 });
+    expect(preview.variants[0]).toMatchObject({ label: "Com Box Solteiro 088x188x62", sku: "1417-7265", sourcePrice: undefined, compareAtPrice: 4437.9 });
+    expect(preview.variants[1]).toMatchObject({ label: "Com Box Universal King Size 193x203x62", sku: "1417-7277", sourcePrice: 6696.9, compareAtPrice: 7760.08 });
     expect(new Set(preview.variants.map((variant) => variant.sourcePrice))).not.toEqual(new Set([6696.9]));
     expect(preview.warnings).toContain("Acorde Bem não expôs preço individual seguro para uma ou mais variantes; revise preço de venda antes de salvar.");
     expect(preview.images.map((image) => image.url)).toEqual([
       "https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg",
       "https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_2.jpg",
+    ]);
+  });
+
+  it("preenche imagens próprias de variantes da Acorde Bem a partir de cada variant_id", async () => {
+    const url = new URL("https://www.colchoesacordebem.com.br/produto/vegas?variant_id=7265");
+    const html = `
+      <meta property="og:image" content="https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg">
+      <script>
+        dataLayer = [{
+          "pageCategory":"Produto",
+          "idProduct":"1417",
+          "nameProduct":"Cama Box Universal Com Colchão Simmons Vegas",
+          "category":"Cama Box com Colchão",
+          "priceSell":6696.9,
+          "price":7760.08,
+          "brand":"Simmons",
+          "availability":"YES",
+          "urlImage":"https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg",
+          "listSku":[
+            {"idSku":"1417-7265","nameSku":"Quantidade: Com Box Casal 138x188x62","price":4437.9,"sellPrice":6696.9,"availability":"YES","urlImage":""},
+            {"idSku":"1417-7267","nameSku":"Quantidade: Com Box Queen 158x198x62","price":7760.08,"sellPrice":6696.9,"availability":"YES","urlImage":""}
+          ]
+        }]
+      </script>
+      <div class="product-gallery"><div class="product-images">
+        <img data-src="https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_2.jpg" alt="Simmons Vegas">
+      </div></div>
+    `;
+    const preview = parseProductHtmlWithAdapters(html, url);
+    const variantPages: Record<string, string> = {
+      "7265": `
+        <input id="selectedVariant" value="7265">
+        <script>
+          dataLayer = [{
+            "pageCategory":"Produto",
+            "idProduct":"1417",
+            "nameProduct":"Cama Box Universal Com Colchão Simmons Vegas",
+            "priceSell":4437.9,
+            "price":4437.9,
+            "availability":"YES",
+            "urlImage":"https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg",
+            "listSku":[{"idSku":"1417-7265","nameSku":"Quantidade: Com Box Casal 138x188x62","urlImage":"https://images.tcdn.com.br/img/img_prod/573513/sku_casal_1417_7265.jpg"}]
+          }]
+        </script>
+        <div class="product-gallery"><div class="product-images">
+          <img data-src="https://images.tcdn.com.br/img/img_prod/573513/vegas_casal_1417_7265.jpg" alt="Simmons Vegas Casal">
+        </div></div>
+      `,
+      "7267": `
+        <input id="selectedVariant" value="7267">
+        <script>
+          dataLayer = [{
+            "pageCategory":"Produto",
+            "idProduct":"1417",
+            "nameProduct":"Cama Box Universal Com Colchão Simmons Vegas",
+            "priceSell":5599.9,
+            "price":7760.08,
+            "availability":"YES",
+            "urlImage":"https://images.tcdn.com.br/img/img_prod/573513/vegas_queen_1417_7267.jpg",
+            "listSku":[{"idSku":"1417-7267","nameSku":"Quantidade: Com Box Queen 158x198x62","urlImage":"https://images.tcdn.com.br/img/img_prod/573513/sku_queen_1417_7267.jpg"}]
+          }]
+        </script>
+      `,
+    };
+    const fetchHtml = vi.fn(async (variantUrl: URL) => ({ url: variantUrl, html: variantPages[variantUrl.searchParams.get("variant_id") ?? ""] ?? "" }));
+
+    const enhanced = await colchoesAcordeBemAdapter.enhanceRemote?.({ html, url, preview, fetchHtml });
+
+    expect(fetchHtml).toHaveBeenCalledTimes(2);
+    expect(enhanced?.variants).toHaveLength(2);
+    expect(enhanced?.variants[0]).toMatchObject({
+      label: "Com Box Casal 138x188x62",
+      sku: "1417-7265",
+      sourcePrice: 6696.9,
+      imageUrl: "https://images.tcdn.com.br/img/img_prod/573513/vegas_casal_1417_7265.jpg",
+    });
+    expect(enhanced?.variants[1]).toMatchObject({
+      label: "Com Box Queen 158x198x62",
+      sku: "1417-7267",
+      sourcePrice: 5599.9,
+      imageUrl: "https://images.tcdn.com.br/img/img_prod/573513/vegas_queen_1417_7267.jpg",
+    });
+    expect(new Set(enhanced?.variants.map((variant) => variant.imageUrl))).toEqual(new Set([
+      "https://images.tcdn.com.br/img/img_prod/573513/vegas_casal_1417_7265.jpg",
+      "https://images.tcdn.com.br/img/img_prod/573513/vegas_queen_1417_7267.jpg",
+    ]));
+    expect(enhanced?.images.map((image) => image.url)).toEqual([
+      "https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg",
+      "https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_2.jpg",
+      "https://images.tcdn.com.br/img/img_prod/573513/vegas_casal_1417_7265.jpg",
+      "https://images.tcdn.com.br/img/img_prod/573513/vegas_queen_1417_7267.jpg",
     ]);
   });
 });

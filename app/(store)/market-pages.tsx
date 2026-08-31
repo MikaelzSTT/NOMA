@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { Clock3, Store } from "lucide-react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { CatalogFilters } from "@/components/catalog-filters";
 import { CatalogResults } from "@/components/catalog-results";
 import { CatalogToolbar } from "@/components/catalog-toolbar";
 import { Pagination } from "@/components/pagination";
-import { ProductGallery } from "@/components/product-gallery";
+import { ProductDetailPurchase } from "@/components/product-detail-purchase";
 import { ProductSection } from "@/components/product-section";
-import { ProductVariantSelector } from "@/components/product-variant-selector";
-import { Rating } from "@/components/rating";
 import { getCategory, getEquivalentProductSlug, getProductBySlug, getRelatedProducts, listProducts } from "@/lib/catalog";
 import { MARKET_CONFIG, categoryPath, collectionsPath, productPath, searchPath, type Market } from "@/lib/market";
 import { parseProductFilters, type RawSearchParams } from "@/lib/search-params";
@@ -64,33 +61,28 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
     <div className="container pb-8">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <Breadcrumbs market={market} items={[{ label: product.category.name, href: categoryPath(market, product.category.slug) }, { label: product.title }]} />
-      <section className="product-detail">
-        <ProductGallery images={product.images} name={product.title} sprite={sprite} />
-        <div className="product-summary">
-          <p className="eyebrow">{product.brand?.name ?? product.category.name}</p>
-          <h1>{product.title}</h1>
-          <div className="mt-3"><Rating value={product.rating ? Number(product.rating) : null} count={product.reviewCount} /></div>
-          <p className="mt-5 text-sm leading-6 text-muted">{product.shortDescription}</p>
-          <ProductVariantSelector
-            market={market}
-            variants={product.variants}
-            fallback={{
-              sellingPrice: product.sellingPrice,
-              compareAtPrice: product.compareAtPrice,
-              discountPercent: product.discountPercent,
-              currency: product.currency,
-              stock: product.stock,
-              availability: product.availability,
-            }}
-          />
-          {product.installmentText && <p className="mt-2 text-sm text-muted">{product.installmentText}</p>}
-          <div className="mt-3 space-y-3 text-sm">
-            <p className="flex items-center gap-2"><Store size={17} className="text-brand" /><span>{isUS ? "Supplier" : "Fornecedor"} <strong>{product.supplier.name}</strong></span></p>
-            {product.estimatedDelivery && <p className="flex items-center gap-2 text-muted"><Clock3 size={17} /><span>{isUS ? "Estimated delivery" : "Entrega estimada"}: {product.estimatedDelivery}</span></p>}
-          </div>
-          <button disabled className="button-buy opacity-60">{isUS ? "Checkout coming in a future step" : "Compra disponível em uma próxima etapa"}</button>
-        </div>
-      </section>
+      <ProductDetailPurchase
+        images={product.images}
+        name={product.title}
+        brandLabel={product.brand?.name ?? product.category.name}
+        shortDescription={product.shortDescription}
+        rating={product.rating ? Number(product.rating) : null}
+        reviewCount={product.reviewCount}
+        supplierName={product.supplier.name}
+        estimatedDelivery={product.estimatedDelivery}
+        installmentText={product.installmentText}
+        sprite={sprite}
+        market={market}
+        variants={product.variants}
+        fallback={{
+          sellingPrice: product.sellingPrice,
+          compareAtPrice: product.compareAtPrice,
+          discountPercent: product.discountPercent,
+          currency: product.currency,
+          stock: product.stock,
+          availability: product.availability,
+        }}
+      />
 
       <section className="content-band">
         <div>

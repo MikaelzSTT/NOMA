@@ -11,6 +11,8 @@ export function ProductVariantSelector({
   variants,
   fallback,
   market,
+  selectedId,
+  onSelectVariant,
 }: {
   variants: CatalogProductVariant[];
   fallback: {
@@ -22,10 +24,13 @@ export function ProductVariantSelector({
     availability: string;
   };
   market: Market;
+  selectedId?: string;
+  onSelectVariant?: (variant: CatalogProductVariant) => void;
 }) {
   const options = useMemo(() => variants, [variants]);
-  const [selectedId, setSelectedId] = useState(options.find((variant) => variant.isDefault)?.id ?? options[0]?.id ?? "");
-  const selected = options.find((variant) => variant.id === selectedId);
+  const [internalSelectedId, setInternalSelectedId] = useState(options.find((variant) => variant.isDefault)?.id ?? options[0]?.id ?? "");
+  const activeSelectedId = selectedId ?? internalSelectedId;
+  const selected = options.find((variant) => variant.id === activeSelectedId);
   const sellingPrice = selected?.salePrice ?? fallback.sellingPrice;
   const compareAtPrice = selected?.compareAtPrice ?? fallback.compareAtPrice;
   const discount = calculateDiscount(sellingPrice, compareAtPrice) ?? fallback.discountPercent;
@@ -51,8 +56,11 @@ export function ProductVariantSelector({
               <button
                 key={variant.id}
                 type="button"
-                className={`variant-choice ${variant.id === selectedId ? "selected" : ""}`}
-                onClick={() => setSelectedId(variant.id)}
+                className={`variant-choice ${variant.id === activeSelectedId ? "selected" : ""}`}
+                onClick={() => {
+                  setInternalSelectedId(variant.id);
+                  onSelectVariant?.(variant);
+                }}
               >
                 <span>{variant.label}</span>
                 {Object.keys(variant.attributes).length > 0 && <small>{variantSubtitle(variant.attributes)}</small>}
