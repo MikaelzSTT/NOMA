@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { CheckCircle2, Clock3, PackageCheck, Store } from "lucide-react";
+import { Clock3, Store } from "lucide-react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { CatalogFilters } from "@/components/catalog-filters";
 import { CatalogResults } from "@/components/catalog-results";
@@ -8,11 +8,12 @@ import { CatalogToolbar } from "@/components/catalog-toolbar";
 import { Pagination } from "@/components/pagination";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductSection } from "@/components/product-section";
+import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
 import { getCategory, getEquivalentProductSlug, getProductBySlug, getRelatedProducts, listProducts } from "@/lib/catalog";
 import { MARKET_CONFIG, categoryPath, collectionsPath, productPath, searchPath, type Market } from "@/lib/market";
 import { parseProductFilters, type RawSearchParams } from "@/lib/search-params";
-import { absoluteUrl, formatMoney } from "@/lib/utils";
+import { absoluteUrl } from "@/lib/utils";
 
 type ProductProps = { params: Promise<{ slug: string }> };
 type CategoryProps = { params: Promise<{ slug: string }>; searchParams: Promise<RawSearchParams> };
@@ -49,11 +50,9 @@ export async function productMetadata({ params, market }: ProductProps & { marke
 
 export async function MarketProductPage({ params, market }: ProductProps & { market: Market }) {
   const { slug } = await params;
-  const config = MARKET_CONFIG[market];
   const product = await getProductBySlug({ slug, market });
   if (!product) notFound();
   const related = await getRelatedProducts(product, market);
-  const discount = product.discountPercent ? Math.round(Number(product.discountPercent)) : 0;
   const specs = Object.entries(product.attributes).filter(([key]) => !["badge", "spriteColumn", "spriteRow"].includes(key));
   const sprite = product.images[0]?.url === "/images/noma/products.webp"
     ? { column: Number(product.attributes.spriteColumn ?? 0), row: Number(product.attributes.spriteRow ?? 0) }
@@ -72,20 +71,23 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
           <h1>{product.title}</h1>
           <div className="mt-3"><Rating value={product.rating ? Number(product.rating) : null} count={product.reviewCount} /></div>
           <p className="mt-5 text-sm leading-6 text-muted">{product.shortDescription}</p>
-          <div className="my-6 border-y border-border py-5">
-            {product.compareAtPrice && product.sellingPrice && product.compareAtPrice > product.sellingPrice && (
-              <p className="text-sm text-muted"><span className="line-through">{formatMoney(product.compareAtPrice, product.currency, config.locale)}</span>{discount > 0 && <strong className="ml-2 text-coral">{isUS ? `Save ${discount}%` : `Economize ${discount}%`}</strong>}</p>
-            )}
-            {product.sellingPrice ? <p className="mt-1 text-4xl font-black text-ink">{formatMoney(product.sellingPrice, product.currency, config.locale)}</p> : <p className="text-xl font-bold text-muted">{isUS ? "Price unavailable" : "Preco indisponivel"}</p>}
-            {product.installmentText && <p className="mt-2 text-sm text-muted">{product.installmentText}</p>}
-          </div>
-          <div className="space-y-3 text-sm">
+          <ProductVariantSelector
+            market={market}
+            variants={product.variants}
+            fallback={{
+              sellingPrice: product.sellingPrice,
+              compareAtPrice: product.compareAtPrice,
+              discountPercent: product.discountPercent,
+              currency: product.currency,
+              stock: product.stock,
+              availability: product.availability,
+            }}
+          />
+          {product.installmentText && <p className="mt-2 text-sm text-muted">{product.installmentText}</p>}
+          <div className="mt-3 space-y-3 text-sm">
             <p className="flex items-center gap-2"><Store size={17} className="text-brand" /><span>{isUS ? "Supplier" : "Fornecedor"} <strong>{product.supplier.name}</strong></span></p>
-            <p className="flex items-center gap-2"><CheckCircle2 size={17} className="text-brand" /><span>{availabilityLabel(product.availability, market)}</span></p>
-            <p className="flex items-center gap-2"><PackageCheck size={17} className="text-brand" /><span>{isUS ? `${product.stock} unit(s) in stock` : `${product.stock} unidade(s) em estoque`}</span></p>
             {product.estimatedDelivery && <p className="flex items-center gap-2 text-muted"><Clock3 size={17} /><span>{isUS ? "Estimated delivery" : "Entrega estimada"}: {product.estimatedDelivery}</span></p>}
           </div>
-          {product.variants.length > 0 && <div className="mt-6"><p className="mb-2 text-xs font-bold uppercase text-muted">{isUS ? "Variants" : "Variantes"}</p><div className="flex flex-wrap gap-2">{product.variants.map((variant) => <span key={variant.id} className="rounded-sm border border-border px-3 py-2 text-sm font-semibold">{variant.title}{variant.stock === 0 ? (isUS ? " · unavailable" : " · indisponível") : ""}</span>)}</div></div>}
           <button disabled className="button-buy opacity-60">{isUS ? "Checkout coming in a future step" : "Compra disponível em uma próxima etapa"}</button>
         </div>
       </section>
@@ -201,14 +203,6 @@ export function collectionsMetadata(market: Market): Metadata {
     title: market === "US" ? "Collections" : "Coleções",
     alternates: { canonical: absoluteUrl(collectionsPath(market)) },
   };
-}
-
-function availabilityLabel(value: string, market: Market) {
-  const labels = {
-    BR: { AVAILABLE: "Disponível", OUT_OF_STOCK: "Indisponível no momento", PREORDER: "Disponível em pré-venda", UNKNOWN: "Disponibilidade não informada", REMOVED: "Produto removido" },
-    US: { AVAILABLE: "Available", OUT_OF_STOCK: "Currently out of stock", PREORDER: "Available for preorder", UNKNOWN: "Availability not provided", REMOVED: "Product removed" },
-  } as const;
-  return labels[market][value as keyof typeof labels.BR] ?? labels[market].UNKNOWN;
 }
 
 function buildProductSchema(product: NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>, market: Market) {

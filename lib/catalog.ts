@@ -27,6 +27,11 @@ const offerSelect = {
   popularityScore: true,
   updatedAt: true,
   productId: true,
+  variants: {
+    where: { active: true },
+    select: { id: true, label: true, sku: true, attributes: true, salePrice: true, compareAtPrice: true, stock: true, availability: true, imageUrl: true, isDefault: true, position: true },
+    orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
+  },
   supplier: { select: { id: true, name: true, slug: true } },
   product: {
     select: {
@@ -91,7 +96,20 @@ export interface CatalogProduct {
   category: { id: string; name: string; slug: string };
   brand: { id: string; name: string; slug: string } | null;
   images: Array<{ id: string; url: string; alt: string | null; position: number }>;
-  variants: Array<{ id: string; sku: string; title: string; options: Record<string, string>; sellingPrice: number | null; stock: number }>;
+  variants: CatalogProductVariant[];
+}
+
+export interface CatalogProductVariant {
+  id: string;
+  label: string;
+  sku: string | null;
+  attributes: Record<string, string | number | boolean>;
+  salePrice: number;
+  compareAtPrice: number | null;
+  stock: number;
+  availability: string;
+  imageUrl: string | null;
+  isDefault: boolean;
 }
 
 function publicWhere(filters: ProductFilters, market: Market): Prisma.ProductMarketOfferWhereInput {
@@ -282,7 +300,23 @@ export async function getSitemapCategories(market: Market) {
 
 function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
   const product = offer.product;
+  const rawOfferVariants = Array.isArray(offer.variants) ? offer.variants : [];
+  const offerVariants = rawOfferVariants.map((variant) => ({
+    id: variant.id,
+    label: variant.label,
+    sku: variant.sku,
+    attributes: publicAttributes(variant.attributes),
+    salePrice: Number(variant.salePrice),
+    compareAtPrice: variant.compareAtPrice == null ? null : Number(variant.compareAtPrice),
+    stock: variant.stock,
+    availability: variant.availability,
+    imageUrl: variant.imageUrl,
+    isDefault: variant.isDefault,
+  }));
+  const defaultOfferVariant = offerVariants.find((variant) => variant.isDefault) ?? offerVariants[0];
   const images = offerImages(offer.images, product.images.map((image) => ({ id: image.id, url: image.url, alt: image.alt, position: image.position })));
+  const sellingPrice = defaultOfferVariant?.salePrice ?? (offer.sellingPrice == null ? null : Number(offer.sellingPrice));
+  const compareAtPrice = defaultOfferVariant ? defaultOfferVariant.compareAtPrice : offer.compareAtPrice == null ? null : Number(offer.compareAtPrice);
   return {
     id: offer.id,
     productId: offer.productId,
@@ -295,12 +329,12 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     shortDescription: offer.shortDescription ?? product.shortDescription,
     description: offer.description ?? product.description,
     subcategory: product.subcategory,
-    sellingPrice: offer.sellingPrice == null ? null : Number(offer.sellingPrice),
-    compareAtPrice: offer.compareAtPrice == null ? null : Number(offer.compareAtPrice),
-    discountPercent: offer.discountPercent == null ? null : Number(offer.discountPercent),
+    sellingPrice,
+    compareAtPrice,
+    discountPercent: calculatePublicDiscount(sellingPrice, compareAtPrice) ?? (offer.discountPercent == null ? null : Number(offer.discountPercent)),
     currency: offer.currency,
-    stock: offer.stockQuantity,
-    availability: offer.availability,
+    stock: defaultOfferVariant?.stock ?? offer.stockQuantity,
+    availability: defaultOfferVariant?.availability ?? offer.availability,
     shippingCost: offer.shippingCost == null ? null : Number(offer.shippingCost),
     estimatedDelivery: offer.estimatedDelivery,
     attributes: publicAttributes(product.attributes),
@@ -315,10 +349,17 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     category: product.category,
     brand: product.brand,
     images,
-    variants: product.variants.map((variant) => ({
-      ...variant,
-      options: publicAttributes(variant.options) as Record<string, string>,
-      sellingPrice: variant.sellingPrice == null ? null : Number(variant.sellingPrice),
+    variants: offerVariants.length ? offerVariants : (product.variants ?? []).map((variant, index) => ({
+      id: variant.id,
+      label: variant.title,
+      sku: variant.sku,
+      attributes: publicAttributes(variant.options),
+      salePrice: variant.sellingPrice == null ? sellingPrice ?? 0 : Number(variant.sellingPrice),
+      compareAtPrice: null,
+      stock: variant.stock,
+      availability: variant.stock > 0 ? "AVAILABLE" : "OUT_OF_STOCK",
+      imageUrl: null,
+      isDefault: index === 0,
     })),
   };
 }
@@ -342,4 +383,9 @@ function publicAttributes(value: unknown) {
     !/(cost|custo|wholesale|atacado|supplier.*price)/i.test(key)
     && ["string", "number", "boolean"].includes(typeof item),
   )) as Record<string, string | number | boolean>;
+}
+
+function calculatePublicDiscount(sellingPrice: number | null, compareAtPrice: number | null) {
+  if (!sellingPrice || !compareAtPrice || compareAtPrice <= sellingPrice) return null;
+  return Math.round(((compareAtPrice - sellingPrice) / compareAtPrice) * 100);
 }

@@ -24,6 +24,22 @@ export interface ManualProductInput {
   estimatedDeliveryMaxDays: number;
   featured: boolean;
   active: boolean;
+  variants?: ManualOfferVariantInput[];
+}
+
+export interface ManualOfferVariantInput {
+  label: string;
+  sku?: string;
+  attributes: Record<string, string | number | boolean>;
+  costPrice: number;
+  salePrice: number;
+  compareAtPrice?: number;
+  stock: number;
+  active: boolean;
+  availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN";
+  sourceUrl?: string;
+  imageUrl?: string;
+  isDefault?: boolean;
 }
 
 export class ManualProductError extends Error {
@@ -54,6 +70,9 @@ export async function createManualProduct(input: ManualProductInput) {
     const supplierProductId = `manual-${input.market.toLowerCase()}-${publicSlug}`.slice(0, 255);
     const sku = `MANUAL-${input.market}-${publicSlug}`.toUpperCase().slice(0, 255);
     const estimatedDelivery = deliveryLabel(input.market, input.estimatedDeliveryMinDays, input.estimatedDeliveryMaxDays);
+    const variants = normalizeManualOfferVariants(input);
+    const defaultVariant = variants.find((variant) => variant.isDefault) ?? variants[0];
+    const discountPercent = calculateDiscount(defaultVariant.salePrice, defaultVariant.compareAtPrice);
     const images = input.images.map((url, position) => ({
       url,
       sourceUrl: url,
@@ -64,7 +83,6 @@ export async function createManualProduct(input: ManualProductInput) {
       isPrimary: position === 0,
     }));
     const offerImages = images.map(({ url, alt, position, isPrimary }) => ({ url, alt, position, isPrimary })) as Prisma.InputJsonValue;
-    const discountPercent = calculateDiscount(input.sellingPrice, input.compareAtPrice);
     const product = await transaction.product.create({
       data: {
         supplierProductId,
@@ -74,13 +92,13 @@ export async function createManualProduct(input: ManualProductInput) {
         slug: productSlug,
         title: input.title,
         description: input.description ?? null,
-        costPrice: input.costPrice,
-        sellingPrice: input.sellingPrice,
-        compareAtPrice: input.compareAtPrice ?? null,
+        costPrice: defaultVariant.costPrice,
+        sellingPrice: defaultVariant.salePrice,
+        compareAtPrice: defaultVariant.compareAtPrice ?? null,
         discountPercent,
         currency,
-        stock: input.stock,
-        availability: input.availability,
+        stock: defaultVariant.stock,
+        availability: defaultVariant.availability,
         estimatedDelivery,
         sourceUrl,
         attributes: { manual: true } as Prisma.InputJsonValue,
@@ -110,12 +128,12 @@ export async function createManualProduct(input: ManualProductInput) {
         description: input.market === "US" ? input.description ?? null : null,
         images: input.market === "US" ? offerImages : undefined,
         currency,
-        costPrice: input.costPrice,
-        sellingPrice: input.sellingPrice,
-        compareAtPrice: input.compareAtPrice ?? null,
+        costPrice: defaultVariant.costPrice,
+        sellingPrice: defaultVariant.salePrice,
+        compareAtPrice: defaultVariant.compareAtPrice ?? null,
         discountPercent,
-        stockQuantity: input.stock,
-        availability: input.availability,
+        stockQuantity: defaultVariant.stock,
+        availability: defaultVariant.availability,
         estimatedDelivery,
         estimatedDeliveryMinDays: input.estimatedDeliveryMinDays,
         estimatedDeliveryMaxDays: input.estimatedDeliveryMaxDays,
@@ -128,6 +146,23 @@ export async function createManualProduct(input: ManualProductInput) {
         lastPriceSyncAt: now,
         lastStockSyncAt: now,
         lastSyncedAt: now,
+        variants: {
+          create: variants.map((variant, position) => ({
+            label: variant.label,
+            sku: variant.sku ?? null,
+            attributes: variant.attributes as Prisma.InputJsonValue,
+            costPrice: variant.costPrice,
+            salePrice: variant.salePrice,
+            compareAtPrice: variant.compareAtPrice ?? null,
+            stock: variant.stock,
+            active: variant.active,
+            availability: variant.availability,
+            sourceUrl: variant.sourceUrl ?? null,
+            imageUrl: variant.imageUrl ?? null,
+            isDefault: variant.isDefault,
+            position,
+          })),
+        },
       },
     });
     await transaction.priceHistory.create({
@@ -135,9 +170,9 @@ export async function createManualProduct(input: ManualProductInput) {
         productId: product.id,
         productOfferId: offer.id,
         market: input.market,
-        sellingPrice: input.sellingPrice,
-        compareAtPrice: input.compareAtPrice,
-        costPrice: input.costPrice,
+        sellingPrice: defaultVariant.salePrice,
+        compareAtPrice: defaultVariant.compareAtPrice,
+        costPrice: defaultVariant.costPrice,
         currency,
         recordedAt: now,
       },
@@ -193,4 +228,36 @@ async function availableProductSlug(transaction: Prisma.TransactionClient, prefe
 function deliveryLabel(market: Market, minDays: number, maxDays: number) {
   if (market === "US") return `${minDays}-${maxDays} business days`;
   return `${minDays} a ${maxDays} dias úteis`;
+}
+
+function normalizeManualOfferVariants(input: ManualProductInput): Array<ManualOfferVariantInput & { isDefault: boolean }> {
+  const sourceVariants = input.variants?.length ? input.variants : [{
+    label: "Padrão",
+    sku: undefined,
+    attributes: {},
+    costPrice: input.costPrice,
+    salePrice: input.sellingPrice,
+    compareAtPrice: input.compareAtPrice,
+    stock: input.stock,
+    active: true,
+    availability: input.availability,
+    sourceUrl: undefined,
+    imageUrl: undefined,
+    isDefault: true,
+  }];
+  const defaultIndex = Math.max(0, sourceVariants.findIndex((variant) => variant.isDefault));
+  return sourceVariants.map((variant, index) => ({
+    label: variant.label,
+    sku: variant.sku,
+    attributes: variant.attributes,
+    costPrice: variant.costPrice,
+    salePrice: variant.salePrice,
+    compareAtPrice: variant.compareAtPrice,
+    stock: variant.stock,
+    active: variant.active,
+    availability: variant.availability,
+    sourceUrl: variant.sourceUrl ? normalizeSourceUrl(variant.sourceUrl) : undefined,
+    imageUrl: variant.imageUrl,
+    isDefault: index === defaultIndex,
+  }));
 }

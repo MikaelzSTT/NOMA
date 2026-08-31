@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Save } from "lucide-react";
 import { createManualProductAction } from "@/app/admin/actions";
+import { OfferVariantFields } from "@/components/admin/offer-variant-fields";
 import { MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 import { slugify } from "@/lib/utils";
@@ -56,20 +57,20 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
         <label className="admin-field">Imagens por URL<textarea name="images" rows={6} required placeholder="https://cdn.../imagem-1.jpg&#10;https://cdn.../imagem-2.jpg" /></label>
       </section>
 
-      <section className="admin-panel space-y-4">
-        <div className="grid gap-4 sm:grid-cols-4">
-          <MoneyField name="costPrice" label={`Preço de custo (${currency})`} />
-          <MoneyField name="sellingPrice" label={`Preço de venda (${currency})`} />
-          <MoneyField name="compareAtPrice" label={`Compare at price (${currency})`} optional />
-          <label className="admin-field">Moeda<input value={currency} disabled /></label>
-        </div>
-      </section>
+      <OfferVariantFields currency={currency} initialVariants={[{
+        label: "Padrão",
+        attributes: {},
+        costPrice: 0,
+        salePrice: 0,
+        stock: 1,
+        active: true,
+        availability: "AVAILABLE",
+        isDefault: true,
+      }]} />
 
       <section className="admin-panel space-y-4">
-        <h2>Estoque e entrega</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="admin-field">Estoque<input name="stock" type="number" min="0" step="1" defaultValue="1" required /></label>
-          <label className="admin-field">Disponibilidade<select name="availability" defaultValue="AVAILABLE"><option value="AVAILABLE">Disponível</option><option value="OUT_OF_STOCK">Indisponível</option></select></label>
+        <h2>Entrega</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
           <label className="admin-field">Prazo mínimo de entrega<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" required /></label>
           <label className="admin-field">Prazo máximo de entrega<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" required /></label>
         </div>
@@ -86,8 +87,4 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
       <button className="button-primary"><Save size={17} /> Salvar produto</button>
     </form>
   );
-}
-
-function MoneyField({ name, label, optional }: { name: string; label: string; optional?: boolean }) {
-  return <label className="admin-field">{label}<input name={name} type="number" min="0" step="0.01" required={!optional} /></label>;
 }

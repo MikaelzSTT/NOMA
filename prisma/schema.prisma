@@ -248,6 +248,7 @@ model ProductMarketOffer {
 
   product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  variants ProductMarketOfferVariant[]
 
   @@unique([market, slug])
   @@unique([supplierId, market, supplierProductId])
@@ -258,6 +259,32 @@ model ProductMarketOffer {
   @@index([featured, popularityScore])
   @@index([lastPriceSyncAt])
   @@index([lastStockSyncAt])
+}
+
+model ProductMarketOfferVariant {
+  id             String             @id @default(cuid())
+  label          String
+  sku            String?
+  attributes     Json
+  costPrice      Decimal            @db.Decimal(12, 2)
+  salePrice      Decimal            @db.Decimal(12, 2)
+  compareAtPrice Decimal?           @db.Decimal(12, 2)
+  stock          Int                @default(0)
+  active         Boolean            @default(true)
+  availability   AvailabilityStatus @default(UNKNOWN)
+  sourceUrl      String?
+  imageUrl       String?
+  isDefault      Boolean            @default(false)
+  position       Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  offerId        String
+
+  offer ProductMarketOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId, active])
+  @@index([offerId, isDefault])
+  @@index([sku])
 }
 
 model ProductVariant {

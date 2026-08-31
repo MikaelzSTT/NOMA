@@ -83,6 +83,25 @@ const imageUrl = z.string().trim().min(1).refine((value) => {
 
 const optionalMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional());
 const requiredMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative());
+const availabilitySchema = z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]);
+const variantSchema = z.object({
+  label: z.string().trim().min(1).max(300),
+  sku: z.string().trim().max(255).optional(),
+  attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  costPrice: requiredMoney,
+  salePrice: requiredMoney,
+  compareAtPrice: optionalMoney,
+  stock: z.coerce.number().int().nonnegative(),
+  active: z.boolean().default(false),
+  availability: availabilitySchema,
+  sourceUrl: sourceUrl.optional(),
+  imageUrl: imageUrl.optional(),
+  isDefault: z.boolean().default(false),
+});
+const variantsSchema = z.array(variantSchema).min(1).max(200).transform((variants) => {
+  const defaultIndex = Math.max(0, variants.findIndex((variant) => variant.isDefault));
+  return variants.map((variant, index) => ({ ...variant, isDefault: index === defaultIndex }));
+});
 
 const createManualProductSchema = z.object({
   market: z.string().transform((value) => value.toUpperCase()).refine(isMarket),
@@ -102,18 +121,22 @@ const createManualProductSchema = z.object({
   estimatedDeliveryMaxDays: z.coerce.number().int().nonnegative(),
   featured: z.boolean().default(false),
   active: z.boolean().default(false),
+  variants: variantsSchema,
 }).refine((value) => value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
   path: ["estimatedDeliveryMaxDays"],
 });
 
 export async function createManualProductAction(formData: FormData) {
   await requireAdmin();
+  const variants = parseVariants(formData);
+  if (!variants) redirect("/admin/produtos/novo?saved=error");
   const parsed = createManualProductSchema.safeParse({
     ...Object.fromEntries(formData),
     description: String(formData.get("description") ?? "").trim() || undefined,
     images: String(formData.get("images") ?? "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
     featured: formData.get("featured") === "true",
     active: formData.get("active") === "true",
+    variants,
   });
   if (!parsed.success) redirect("/admin/produtos/novo?saved=error");
 
@@ -153,6 +176,7 @@ const editProductSchema = z.object({
   pricingRuleValue: optionalMoney,
   manualPriceOverride: z.boolean().default(false),
   images: z.array(imageUrl).max(30),
+  variants: variantsSchema,
   internalNotes: z.string().trim().max(2_000).optional(),
   popularityScore: z.coerce.number().int().min(0).max(1_000_000),
   active: z.coerce.boolean().default(false),
@@ -164,6 +188,8 @@ const editProductSchema = z.object({
 export async function updateInternalProductAction(formData: FormData) {
   await requireAdmin();
   const raw = Object.fromEntries(formData);
+  const variants = parseVariants(formData);
+  if (!variants) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=error`);
   const parsed = editProductSchema.safeParse({
     ...raw,
     sourceUrl: String(formData.get("sourceUrl") ?? "").trim() || undefined,
@@ -175,6 +201,7 @@ export async function updateInternalProductAction(formData: FormData) {
     pricingRuleType: String(formData.get("pricingRuleType") ?? "") || undefined,
     internalNotes: String(formData.get("internalNotes") ?? "").trim() || undefined,
     images: String(formData.get("images") ?? "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+    variants,
     manualPriceOverride: formData.get("manualPriceOverride") === "true",
     active: formData.get("active") === "true",
     featured: formData.get("featured") === "true",
@@ -186,20 +213,22 @@ export async function updateInternalProductAction(formData: FormData) {
     category: categoryName,
     brand: brandName,
     images,
+    variants: offerVariants,
     estimatedDeliveryMinDays,
     estimatedDeliveryMaxDays,
     ...input
   } = parsed.data;
   const currency = MARKET_CONFIG[market].currency;
+  const defaultVariant = offerVariants.find((variant) => variant.isDefault) ?? offerVariants[0];
   const [category, brand] = await Promise.all([
     db.category.upsert({ where: { slug: slugify(categoryName) }, update: { name: categoryName }, create: { name: categoryName, slug: slugify(categoryName) } }),
     brandName ? db.brand.upsert({ where: { slug: slugify(brandName) }, update: { name: brandName }, create: { name: brandName, slug: slugify(brandName) } }) : null,
   ]);
   const sellingPrice = input.manualPriceOverride
-    ? input.sellingPrice
-    : input.costPrice != null && input.pricingRuleType && input.pricingRuleValue != null
-      ? calculateSellingPrice(input.costPrice, { type: input.pricingRuleType, value: input.pricingRuleValue })
-      : input.sellingPrice;
+    ? defaultVariant.salePrice
+    : defaultVariant.costPrice != null && input.pricingRuleType && input.pricingRuleValue != null
+      ? calculateSellingPrice(defaultVariant.costPrice, { type: input.pricingRuleType, value: input.pricingRuleValue })
+      : defaultVariant.salePrice;
   await db.$transaction(async (transaction) => {
     const product = await transaction.product.findUnique({ where: { id }, select: { id: true, slug: true, sku: true, supplierId: true, supplierProductId: true, supplier: { select: { id: true, name: true, supportedMarkets: true } } } });
     if (!product) throw new Error("Produto não encontrado.");
@@ -214,16 +243,16 @@ export async function updateInternalProductAction(formData: FormData) {
         subcategory: input.subcategory ?? null,
         ...(market === "BR" ? {
           currency,
-          costPrice: input.costPrice ?? null,
+          costPrice: defaultVariant.costPrice,
           sellingPrice: sellingPrice ?? null,
-          compareAtPrice: input.compareAtPrice ?? null,
-          discountPercent: calculateDiscount(sellingPrice, input.compareAtPrice),
+          compareAtPrice: defaultVariant.compareAtPrice ?? null,
+          discountPercent: calculateDiscount(sellingPrice, defaultVariant.compareAtPrice),
           shippingCost: input.shippingCost ?? null,
           estimatedDelivery: input.estimatedDelivery ?? null,
           pricingRuleType: input.pricingRuleType ?? null,
           pricingRuleValue: input.pricingRuleValue ?? null,
-          stock: input.stock,
-          availability: input.availability,
+          stock: defaultVariant.stock,
+          availability: defaultVariant.availability,
           manualPriceOverride: input.manualPriceOverride,
           active: input.active,
           featured: input.featured,
@@ -244,12 +273,12 @@ export async function updateInternalProductAction(formData: FormData) {
       images: market === "US" ? images.map((url, position) => ({ url, alt: input.title, position, isPrimary: position === 0 })) as Prisma.InputJsonValue : undefined,
       slug: previous?.slug ?? (market === "BR" ? product.slug : `${product.slug}-us`),
       currency,
-      costPrice: input.costPrice ?? null,
+      costPrice: defaultVariant.costPrice,
       sellingPrice: sellingPrice ?? null,
-      compareAtPrice: input.compareAtPrice ?? null,
-      discountPercent: calculateDiscount(sellingPrice, input.compareAtPrice),
-      stockQuantity: input.stock,
-      availability: input.availability,
+      compareAtPrice: defaultVariant.compareAtPrice ?? null,
+      discountPercent: calculateDiscount(sellingPrice, defaultVariant.compareAtPrice),
+      stockQuantity: defaultVariant.stock,
+      availability: defaultVariant.availability,
       shippingCost: input.shippingCost ?? null,
       estimatedDelivery: input.estimatedDelivery ?? null,
       estimatedDeliveryMinDays: estimatedDeliveryMinDays ?? null,
@@ -270,8 +299,27 @@ export async function updateInternalProductAction(formData: FormData) {
     const offer = previous
       ? await transaction.productMarketOffer.update({ where: { id: previous.id }, data: offerData })
       : await transaction.productMarketOffer.create({ data: { ...offerData, productId: id, market } });
+    await transaction.productMarketOfferVariant.deleteMany({ where: { offerId: offer.id } });
+    await transaction.productMarketOfferVariant.createMany({
+      data: offerVariants.map((variant, position) => ({
+        offerId: offer.id,
+        label: variant.label,
+        sku: variant.sku ?? null,
+        attributes: variant.attributes as Prisma.InputJsonValue,
+        costPrice: variant.costPrice,
+        salePrice: variant.isDefault ? sellingPrice ?? variant.salePrice : variant.salePrice,
+        compareAtPrice: variant.compareAtPrice ?? null,
+        stock: variant.stock,
+        active: variant.active,
+        availability: variant.availability,
+        sourceUrl: variant.sourceUrl ?? null,
+        imageUrl: variant.imageUrl ?? null,
+        isDefault: variant.isDefault,
+        position,
+      })),
+    });
     if (sellingPrice != null && Number(previous?.sellingPrice) !== sellingPrice) {
-      await transaction.priceHistory.create({ data: { productId: id, productOfferId: offer.id, market, sellingPrice, compareAtPrice: input.compareAtPrice, costPrice: input.costPrice, currency } });
+      await transaction.priceHistory.create({ data: { productId: id, productOfferId: offer.id, market, sellingPrice, compareAtPrice: defaultVariant.compareAtPrice, costPrice: defaultVariant.costPrice, currency } });
     }
   });
   revalidatePath(`/admin/produtos/${id}`);
@@ -338,4 +386,13 @@ export async function saveSupplierAction(formData: FormData) {
   revalidatePath("/admin/fornecedores");
   revalidatePath("/admin/importar");
   redirect("/admin/fornecedores?saved=ok");
+}
+
+function parseVariants(formData: FormData) {
+  try {
+    const value = JSON.parse(String(formData.get("variantsJson") ?? "[]")) as unknown;
+    return Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
 }

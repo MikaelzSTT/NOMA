@@ -104,6 +104,58 @@ describe("createManualProduct", () => {
     }));
   });
 
+  it("grava variantes da oferta e usa a variante padrão como snapshot comercial", async () => {
+    await createManualProduct({
+      ...baseInput,
+      variants: [
+        {
+          label: "Solteiro sem box",
+          sku: "COL-SOL-SE",
+          attributes: { configuracao: "Sem Box", tamanho: "Solteiro", dimensoes: "88x188x28 cm" },
+          costPrice: 900,
+          salePrice: 1500,
+          stock: 2,
+          active: true,
+          availability: "AVAILABLE",
+          isDefault: false,
+        },
+        {
+          label: "Casal com box",
+          sku: "COL-CAS-BO",
+          attributes: { configuracao: "Com Box", tamanho: "Casal" },
+          costPrice: 1300,
+          salePrice: 2300,
+          compareAtPrice: 2600,
+          stock: 5,
+          active: true,
+          availability: "AVAILABLE",
+          imageUrl: "https://cdn.example.com/casal-box.jpg",
+          isDefault: true,
+        },
+      ],
+    });
+
+    expect(mocks.transaction.product.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        costPrice: 1300,
+        sellingPrice: 2300,
+        compareAtPrice: 2600,
+        stock: 5,
+      }),
+    }));
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        sellingPrice: 2300,
+        variants: {
+          create: [
+            expect.objectContaining({ label: "Solteiro sem box", isDefault: false, salePrice: 1500 }),
+            expect.objectContaining({ label: "Casal com box", isDefault: true, salePrice: 2300, imageUrl: "https://cdn.example.com/casal-box.jpg" }),
+          ],
+        },
+      }),
+    }));
+  });
+
   it("rejeita fornecedor que não opera no mercado escolhido", async () => {
     mocks.transaction.supplier.findUnique.mockResolvedValue({ id: "supplier-br", name: "Fornecedor BR", adapterKey: "supplier-br", active: true, supportedMarkets: ["BR"] });
 

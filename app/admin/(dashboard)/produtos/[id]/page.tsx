@@ -1,7 +1,9 @@
 import Link from "next/link";
+import type { Prisma } from "@/generated/prisma/client";
 import { ArrowLeft, ExternalLink, Save } from "lucide-react";
 import { notFound } from "next/navigation";
 import { updateInternalProductAction } from "@/app/admin/actions";
+import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/offer-variant-fields";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, MARKETS, isMarket, type Market } from "@/lib/market";
@@ -12,7 +14,7 @@ type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<str
 export default async function AdminProductEditPage({ params, searchParams }: Props) {
   await requireAdmin();
   const [{ id }, raw] = await Promise.all([params, searchParams]);
-  const product = await db.product.findUnique({ where: { id }, include: { supplier: true, category: true, brand: true, images: { orderBy: { position: "asc" } }, variants: { orderBy: { createdAt: "asc" } }, offers: { include: { supplier: true }, orderBy: { market: "asc" } } } });
+  const product = await db.product.findUnique({ where: { id }, include: { supplier: true, category: true, brand: true, images: { orderBy: { position: "asc" } }, offers: { include: { supplier: true, variants: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] } }, orderBy: { market: "asc" } } } });
   if (!product) notFound();
   const selectedMarket = typeof raw.market === "string" && isMarket(raw.market.toUpperCase()) ? raw.market.toUpperCase() as Market : "BR";
   const selectedOffer = product.offers.find((offer) => offer.market === selectedMarket);
@@ -25,6 +27,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
   const editTitle = selectedOffer?.title ?? product.title;
   const editShortDescription = selectedOffer?.shortDescription ?? product.shortDescription ?? "";
   const editDescription = selectedOffer?.description ?? product.description ?? "";
+  const initialVariants = toAdminOfferVariants(selectedOffer, product);
 
   return (
     <div className="admin-page max-w-5xl">
@@ -61,18 +64,18 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
           <label className="admin-field">Imagens — uma URL ou caminho local por linha<textarea name="images" rows={5} defaultValue={offerImages.join("\n")} placeholder="https://cdn.../imagem.jpg" /></label>
         </section>
 
+        <OfferVariantFields currency={MARKET_CONFIG[selectedMarket].currency} initialVariants={initialVariants} />
+
         <section className="admin-panel space-y-4">
-          <div><h2>Preço e margem</h2><p className="mt-1 text-sm text-muted">O custo é visível somente no admin. Marque override para preservar manualmente o preço de venda.</p></div>
-          <div className="grid gap-4 sm:grid-cols-4"><MoneyField name="costPrice" label="Custo do fornecedor" value={cost} /><MoneyField name="sellingPrice" label="Preço de venda" value={selling} /><MoneyField name="compareAtPrice" label="Preço comparativo" value={selectedOffer?.compareAtPrice == null ? null : Number(selectedOffer.compareAtPrice)} /><label className="admin-field">Moeda<input value={MARKET_CONFIG[selectedMarket].currency} disabled /></label></div>
+          <div><h2>Preço e margem</h2><p className="mt-1 text-sm text-muted">A oferta usa a variante padrão como referência. O custo é visível somente no admin.</p></div>
           <div className="grid gap-4 sm:grid-cols-3"><label className="admin-field">Tipo de regra<select name="pricingRuleType" defaultValue={selectedOffer?.pricingRuleType ?? ""}><option value="">Sem regra por produto</option><option value="FIXED_MARGIN">Custo + margem fixa</option><option value="MARKUP">Custo × markup</option></select></label><label className="admin-field">Valor da margem/markup<input name="pricingRuleValue" type="number" min="0" step="0.0001" defaultValue={selectedOffer?.pricingRuleValue?.toString() ?? ""} /></label><ReadOnly label="Margem atual" value={margin == null ? "Não calculável" : formatMoney(margin, selectedOffer?.currency ?? product.currency)} /></div>
           <label className="check-row"><input name="manualPriceOverride" type="checkbox" value="true" defaultChecked={selectedOffer?.manualPriceOverride ?? product.manualPriceOverride} />Preservar preço de venda como override manual</label>
         </section>
 
         <section className="admin-panel space-y-4">
-          <h2>Estoque e entrega</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"><label className="admin-field">Estoque<input name="stock" type="number" min="0" step="1" defaultValue={selectedOffer?.stockQuantity ?? product.stock} /></label><label className="admin-field">Disponibilidade<select name="availability" defaultValue={selectedOffer?.availability ?? product.availability}><option value="AVAILABLE">Disponível</option><option value="OUT_OF_STOCK">Sem estoque</option><option value="PREORDER">Pré-venda</option><option value="UNKNOWN">Não informada</option></select></label><MoneyField name="shippingCost" label="Custo de frete" value={selectedOffer?.shippingCost == null ? null : Number(selectedOffer.shippingCost)} /><label className="admin-field">Prazo mínimo<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMinDays ?? ""} /></label><label className="admin-field">Prazo máximo<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMaxDays ?? ""} /></label></div>
+          <h2>Entrega</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><MoneyField name="shippingCost" label="Custo de frete" value={selectedOffer?.shippingCost == null ? null : Number(selectedOffer.shippingCost)} /><label className="admin-field">Prazo mínimo<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMinDays ?? ""} /></label><label className="admin-field">Prazo máximo<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMaxDays ?? ""} /></label></div>
           <label className="admin-field">Prazo estimado<input name="estimatedDelivery" defaultValue={selectedOffer?.estimatedDelivery ?? product.estimatedDelivery ?? ""} /></label>
-          {product.variants.length > 0 && <div><p className="text-xs font-bold uppercase text-muted">Variantes atuais</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{product.variants.map((variant) => <div key={variant.id} className="rounded-sm border border-border p-3 text-sm"><strong>{variant.title}</strong><p className="text-muted">{variant.sku} · estoque {variant.stock}</p></div>)}</div></div>}
         </section>
 
         <section className="admin-panel space-y-4">
@@ -91,6 +94,47 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
 function ReadOnly({ label, value }: { label: string; value: string }) { return <div><p className="text-xs font-bold uppercase text-muted">{label}</p><p className="mt-1 text-sm font-semibold text-ink">{value}</p></div>; }
 function MoneyField({ name, label, value }: { name: string; label: string; value: number | null }) { return <label className="admin-field">{label}<input name={name} type="number" min="0" step="0.01" defaultValue={value ?? ""} /></label>; }
 
-function MarketOfferSummary({ market, offer }: { market: Market; offer?: { supplier: { name: string }; currency: string; costPrice: unknown; sellingPrice: unknown; stockQuantity: number; availability: string; active: boolean; featured: boolean } }) {
-  return <div className="rounded-sm border border-border p-4 text-sm"><div className="flex items-start justify-between gap-3"><h3 className="font-extrabold text-ink">{MARKET_CONFIG[market].label}</h3><span className={`status-pill ${offer?.active ? "active" : "inactive"}`}>{offer ? offer.active ? "Ativa" : "Inativa" : "Sem oferta"}</span></div>{offer ? <div className="mt-3 grid gap-2"><p>Fornecedor: <strong>{offer.supplier.name}</strong></p><p>Custo: <strong>{offer.costPrice == null ? "—" : formatMoney(Number(offer.costPrice), offer.currency)}</strong></p><p>Preço: <strong>{offer.sellingPrice == null ? "Sem preço" : formatMoney(Number(offer.sellingPrice), offer.currency)}</strong></p><p>Estoque: <strong>{offer.stockQuantity}</strong></p><p>Disponibilidade: <strong>{offer.availability}</strong></p><p>Destaque: <strong>{offer.featured ? "Sim" : "Não"}</strong></p></div> : <p className="mt-3 text-muted">Produto não disponível neste mercado.</p>}</div>;
+function MarketOfferSummary({ market, offer }: { market: Market; offer?: { supplier: { name: string }; currency: string; costPrice: unknown; sellingPrice: unknown; stockQuantity: number; availability: string; active: boolean; featured: boolean; variants: unknown[] } }) {
+  return <div className="rounded-sm border border-border p-4 text-sm"><div className="flex items-start justify-between gap-3"><h3 className="font-extrabold text-ink">{MARKET_CONFIG[market].label}</h3><span className={`status-pill ${offer?.active ? "active" : "inactive"}`}>{offer ? offer.active ? "Ativa" : "Inativa" : "Sem oferta"}</span></div>{offer ? <div className="mt-3 grid gap-2"><p>Fornecedor: <strong>{offer.supplier.name}</strong></p><p>Custo: <strong>{offer.costPrice == null ? "—" : formatMoney(Number(offer.costPrice), offer.currency)}</strong></p><p>Preço: <strong>{offer.sellingPrice == null ? "Sem preço" : formatMoney(Number(offer.sellingPrice), offer.currency)}</strong></p><p>Estoque: <strong>{offer.stockQuantity}</strong></p><p>Disponibilidade: <strong>{offer.availability}</strong></p><p>Variantes: <strong>{offer.variants.length}</strong></p><p>Destaque: <strong>{offer.featured ? "Sim" : "Não"}</strong></p></div> : <p className="mt-3 text-muted">Produto não disponível neste mercado.</p>}</div>;
+}
+
+function toAdminOfferVariants(
+  offer: Prisma.ProductMarketOfferGetPayload<{ include: { variants: true } }> | undefined,
+  product: { title: string; sku: string; costPrice: unknown; sellingPrice: unknown; compareAtPrice: unknown; stock: number; availability: string },
+): AdminOfferVariant[] {
+  if (offer?.variants.length) {
+    return offer.variants.map((variant) => ({
+      label: variant.label,
+      sku: variant.sku ?? "",
+      attributes: publicVariantAttributes(variant.attributes),
+      costPrice: Number(variant.costPrice),
+      salePrice: Number(variant.salePrice),
+      compareAtPrice: variant.compareAtPrice == null ? undefined : Number(variant.compareAtPrice),
+      stock: variant.stock,
+      active: variant.active,
+      availability: variant.availability as AdminOfferVariant["availability"],
+      sourceUrl: variant.sourceUrl ?? "",
+      imageUrl: variant.imageUrl ?? "",
+      isDefault: variant.isDefault,
+    }));
+  }
+  return [{
+    label: "Padrão",
+    sku: offer?.sku ?? product.sku,
+    attributes: {},
+    costPrice: Number(offer?.costPrice ?? product.costPrice ?? 0),
+    salePrice: Number(offer?.sellingPrice ?? product.sellingPrice ?? 0),
+    compareAtPrice: offer?.compareAtPrice == null && product.compareAtPrice == null ? undefined : Number(offer?.compareAtPrice ?? product.compareAtPrice),
+    stock: offer?.stockQuantity ?? product.stock,
+    active: offer?.active ?? true,
+    availability: (offer?.availability ?? product.availability) as AdminOfferVariant["availability"],
+    sourceUrl: offer?.sourceUrl ?? "",
+    imageUrl: "",
+    isDefault: true,
+  }];
+}
+
+function publicVariantAttributes(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => ["string", "number", "boolean"].includes(typeof item))) as Record<string, string | number | boolean>;
 }
