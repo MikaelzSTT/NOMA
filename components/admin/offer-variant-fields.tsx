@@ -12,6 +12,9 @@ export interface AdminOfferVariant {
   costPrice: number;
   salePrice: number;
   compareAtPrice?: number;
+  sourcePriceReference?: number;
+  sourceCompareAtReference?: number;
+  sourceCurrency?: string;
   stock: number;
   active: boolean;
   availability: Availability;
@@ -101,6 +104,12 @@ export function OfferVariantFields({
               <label className="admin-field">Disponibilidade<select value={variant.availability} onChange={(event) => patchVariant(index, { availability: event.target.value as Availability })}>{availabilityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
               <label className="check-row self-end pb-3"><input type="checkbox" checked={variant.active} onChange={(event) => patchVariant(index, { active: event.target.checked })} />Ativa</label>
             </div>
+            {variant.sourcePriceReference != null && (
+              <p className="mt-3 rounded-sm border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted">
+                Preço encontrado na fonte: {formatReferenceMoney(variant.sourcePriceReference, variant.sourceCurrency ?? currency)}
+                {variant.sourceCompareAtReference != null ? ` (comparativo ${formatReferenceMoney(variant.sourceCompareAtReference, variant.sourceCurrency ?? currency)})` : ""}. O custo permanece separado.
+              </p>
+            )}
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <TextField label="URL da variante opcional" value={variant.sourceUrl ?? ""} onChange={(value) => patchVariant(index, { sourceUrl: value })} />
               <TextField label="Imagem específica opcional" value={variant.imageUrl ?? ""} onChange={(value) => patchVariant(index, { imageUrl: value })} />
@@ -132,6 +141,9 @@ function blankVariant(index: number): EditableVariant {
     costPrice: 0,
     salePrice: 0,
     compareAtPrice: undefined,
+    sourcePriceReference: undefined,
+    sourceCompareAtReference: undefined,
+    sourceCurrency: undefined,
     stock: 1,
     active: true,
     availability: "AVAILABLE",
@@ -183,4 +195,8 @@ function MoneyField({ label, value, required, onChange }: { label: string; value
 
 function NumberField({ label, value, integer, required, onChange }: { label: string; value?: number; integer?: boolean; required?: boolean; onChange: (value?: number) => void }) {
   return <label className="admin-field">{label}<input type="number" min="0" step={integer ? "1" : "0.01"} required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></label>;
+}
+
+function formatReferenceMoney(value: number, currency: string) {
+  return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", { style: "currency", currency }).format(value);
 }

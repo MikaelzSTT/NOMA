@@ -13,13 +13,14 @@ export interface ManualProductInput {
   title: string;
   slug: string;
   description?: string;
+  brand?: string;
   category: string;
   images: string[];
   costPrice: number;
   sellingPrice: number;
   compareAtPrice?: number;
   stock: number;
-  availability: "AVAILABLE" | "OUT_OF_STOCK";
+  availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN";
   estimatedDeliveryMinDays: number;
   estimatedDeliveryMaxDays: number;
   featured: boolean;
@@ -66,6 +67,13 @@ export async function createManualProduct(input: ManualProductInput) {
       update: { name: input.category },
       create: { name: input.category, slug: slugify(input.category) },
     });
+    const brand = input.brand
+      ? await transaction.brand.upsert({
+        where: { slug: slugify(input.brand) },
+        update: { name: input.brand },
+        create: { name: input.brand, slug: slugify(input.brand) },
+      })
+      : null;
     const productSlug = await availableProductSlug(transaction, input.market === "BR" ? publicSlug : `${publicSlug}-${input.market.toLowerCase()}`);
     const supplierProductId = `manual-${input.market.toLowerCase()}-${publicSlug}`.slice(0, 255);
     const sku = `MANUAL-${input.market}-${publicSlug}`.toUpperCase().slice(0, 255);
@@ -113,6 +121,7 @@ export async function createManualProduct(input: ManualProductInput) {
         lastSyncedAt: now,
         supplierId: supplier.id,
         categoryId: category.id,
+        brandId: brand?.id ?? null,
         images: { create: images },
       },
     });
