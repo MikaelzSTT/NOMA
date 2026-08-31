@@ -123,4 +123,43 @@ describe("importação de produto por URL", () => {
     expect(preview.variants[0]).toMatchObject({ sku: "326-17901", sourcePrice: 1025, compareAtPrice: 1388.39, attributes: { medida: "Colchão De Espuma 078x188x15cm", dimensoes: "078x188x15" } });
     expect(preview.variants[1]).toMatchObject({ availability: "OUT_OF_STOCK", sourcePrice: 1125 });
   });
+
+  it("não replica o preço global da Acorde Bem para variantes sem preço individual seguro", () => {
+    const preview = parseProductHtmlWithAdapters(`
+      <meta property="og:image" content="https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg">
+      <script>
+        dataLayer = [{
+          "pageCategory":"Produto",
+          "idProduct":"1417",
+          "nameProduct":"Cama Box Universal Com Colchão Simmons Vegas",
+          "category":"Cama Box com Colchão",
+          "priceSell":6696.9,
+          "price":7760.08,
+          "brand":"Simmons",
+          "availability":"YES",
+          "urlImage":"https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg",
+          "listSku":[
+            {"idSku":"1417-7265","nameSku":"Quantidade: Com Box Solteiro 088x188x62","price":4437.9,"sellPrice":6696.9,"availability":"YES","urlImage":""},
+            {"idSku":"1417-7277","nameSku":"Quantidade: Com Box Universal King Size 193x203x62","price":7760.08,"sellPrice":6696.9,"availability":"YES","urlImage":""}
+          ]
+        }]
+      </script>
+      <div id="product-wrapper">
+        <div class="product-gallery"><div class="product-images">
+          <img data-src="https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_2.jpg" alt="Simmons Vegas">
+        </div></div>
+      </div>
+      <img data-src="https://images.tcdn.com.br/img/img_prod/573513/outro_produto_999_1.jpg" alt="Outro colchão">
+    `, new URL("https://www.colchoesacordebem.com.br/produto/vegas?variant_id=7277"));
+
+    expect(preview.variants).toHaveLength(2);
+    expect(preview.variants[0]).toMatchObject({ sku: "1417-7265", sourcePrice: undefined, compareAtPrice: 4437.9 });
+    expect(preview.variants[1]).toMatchObject({ sku: "1417-7277", sourcePrice: 6696.9, compareAtPrice: 7760.08 });
+    expect(new Set(preview.variants.map((variant) => variant.sourcePrice))).not.toEqual(new Set([6696.9]));
+    expect(preview.warnings).toContain("Acorde Bem não expôs preço individual seguro para uma ou mais variantes; revise preço de venda antes de salvar.");
+    expect(preview.images.map((image) => image.url)).toEqual([
+      "https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_1.jpg",
+      "https://images.tcdn.com.br/img/img_prod/573513/produto_atual_1417_2.jpg",
+    ]);
+  });
 });

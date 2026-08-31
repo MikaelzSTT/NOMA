@@ -36,7 +36,8 @@ export class ProductUrlImportError extends Error {
 export async function previewProductFromUrl(rawUrl: string): Promise<ProductUrlImportPreview> {
   const initialUrl = await validatePublicProductUrl(rawUrl);
   const fetched = await fetchHtml(initialUrl);
-  return parseProductHtmlWithAdapters(fetched.html, fetched.url);
+  const preview = parseProductHtmlWithAdapters(fetched.html, fetched.url);
+  return applyRemoteAdapter(preview, fetched.html, fetched.url);
 }
 
 export function parseProductHtmlWithAdapters(html: string, url: URL) {
@@ -171,6 +172,22 @@ function applyAdapter(preview: ProductUrlImportPreview, html: string, url: URL) 
   const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
   if (!adapter) return preview;
   const enhanced = adapter.enhance({ html, url, preview });
+  return sanitizePreview({
+    ...enhanced,
+    extraction: {
+      ...enhanced.extraction,
+      adapter: adapter.id,
+      sources: [...new Set([...preview.extraction.sources, ...enhanced.extraction.sources, adapter.id])],
+    },
+    images: dedupeImages(enhanced.images, enhanced.title),
+    variants: dedupeVariants(enhanced.variants, enhanced.sourcePrice, enhanced.compareAtPrice, enhanced.currency, enhanced.availability, enhanced.canonicalUrl ?? enhanced.sourceUrl),
+  });
+}
+
+async function applyRemoteAdapter(preview: ProductUrlImportPreview, html: string, url: URL) {
+  const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
+  if (!adapter?.enhanceRemote) return preview;
+  const enhanced = await adapter.enhanceRemote({ html, url, preview, fetchHtml });
   return sanitizePreview({
     ...enhanced,
     extraction: {
@@ -464,6 +481,7 @@ function dedupeVariants(
   fallbackUrl?: string,
 ) {
   const seen = new Set<string>();
+  const canUsePriceFallback = variants.length === 1;
   return variants.filter((variant) => {
     const key = `${variant.sku ?? ""}:${variant.label}`;
     if (seen.has(key)) return false;
@@ -471,8 +489,8 @@ function dedupeVariants(
     return Boolean(variant.label.trim());
   }).map((variant, index) => ({
     ...variant,
-    sourcePrice: variant.sourcePrice ?? fallbackPrice,
-    compareAtPrice: variant.compareAtPrice === variant.sourcePrice ? fallbackCompareAt : variant.compareAtPrice ?? fallbackCompareAt,
+    sourcePrice: variant.sourcePrice ?? (canUsePriceFallback ? fallbackPrice : undefined),
+    compareAtPrice: variant.compareAtPrice === variant.sourcePrice ? fallbackCompareAt : variant.compareAtPrice ?? (canUsePriceFallback ? fallbackCompareAt : undefined),
     currency: variant.currency ?? fallbackCurrency,
     availability: variant.availability ?? fallbackAvailability,
     sourceUrl: variant.sourceUrl ?? fallbackUrl,

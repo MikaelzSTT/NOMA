@@ -48,8 +48,13 @@ export interface ProductImportAdapterContext {
   preview: ProductUrlImportPreview;
 }
 
+export interface ProductImportAdapterRemoteContext extends ProductImportAdapterContext {
+  fetchHtml: (url: URL) => Promise<{ url: URL; html: string }>;
+}
+
 export interface ProductImportAdapter {
   id: string;
   domains: string[];
   enhance(context: ProductImportAdapterContext): ProductUrlImportPreview;
+  enhanceRemote?(context: ProductImportAdapterRemoteContext): Promise<ProductUrlImportPreview>;
 }

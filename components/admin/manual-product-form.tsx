@@ -200,7 +200,8 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
 }
 
 function previewToVariants(product: ProductUrlImportPreview, fallbackCurrency: string): AdminOfferVariant[] {
-  const source = product.variants.length ? product.variants : [{
+  const hasSourceVariants = product.variants.length > 0;
+  const source = hasSourceVariants ? product.variants : [{
     label: "Padrão",
     attributes: {},
     sourcePrice: product.sourcePrice,
@@ -211,7 +212,7 @@ function previewToVariants(product: ProductUrlImportPreview, fallbackCurrency: s
     imageUrl: product.images[0]?.url,
   }];
   return source.map((variant, index) => {
-    const sourcePrice = variant.sourcePrice ?? product.sourcePrice ?? 0;
+    const sourcePrice = variant.sourcePrice ?? (hasSourceVariants ? 0 : product.sourcePrice ?? 0);
     const availability = variant.availability === "UNKNOWN" ? "AVAILABLE" : variant.availability;
     return {
       label: variant.label,
@@ -219,15 +220,16 @@ function previewToVariants(product: ProductUrlImportPreview, fallbackCurrency: s
       attributes: variant.attributes,
       costPrice: 0,
       salePrice: sourcePrice,
-      compareAtPrice: variant.compareAtPrice ?? product.compareAtPrice,
-      sourcePriceReference: variant.sourcePrice ?? product.sourcePrice,
-      sourceCompareAtReference: variant.compareAtPrice ?? product.compareAtPrice,
+      compareAtPrice: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
+      sourcePriceReference: variant.sourcePrice ?? (hasSourceVariants ? undefined : product.sourcePrice),
+      sourceCompareAtReference: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
       sourceCurrency: variant.currency ?? product.currency ?? fallbackCurrency,
       stock: availability === "OUT_OF_STOCK" ? 0 : 1,
       active: availability !== "OUT_OF_STOCK",
       availability,
       sourceUrl: variant.sourceUrl ?? product.canonicalUrl ?? product.sourceUrl,
       imageUrl: variant.imageUrl ?? product.images[0]?.url,
+      sourcePriceMissing: hasSourceVariants && variant.sourcePrice == null,
       isDefault: index === 0,
     };
   });
