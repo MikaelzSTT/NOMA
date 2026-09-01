@@ -5,6 +5,7 @@ import { ImageOff, Link2, LoaderCircle, Save, Search, X } from "lucide-react";
 import { createManualProductAction } from "@/app/admin/actions";
 import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/offer-variant-fields";
 import { MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
+import { previewToOfferVariants } from "@/lib/admin/url-preview-to-variants";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 import type { ProductUrlImportPreview } from "@/lib/product-import/types";
 import { slugify } from "@/lib/utils";
@@ -101,15 +102,15 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
     if (product.brand) setBrand(product.brand);
     if (product.description) setDescription(product.description);
     if (product.images.length) setImages(product.images.map((image) => image.url));
-    const nextVariants = previewToVariants(product, currency);
+    const nextVariants = previewToOfferVariants(product, currency);
     if (nextVariants.length) {
       setVariants(nextVariants);
       setVariantRevision((current) => current + 1);
     }
-    const priceText = product.sourcePrice != null ? formatMoney(product.sourcePrice, product.currency ?? currency) : "sem preço inicial";
+    const priceText = product.sourcePrice != null ? formatMoney(product.sourcePrice, product.currency ?? currency) : "sem custo inicial";
     setPreview({
       status: "success",
-      message: `Encontramos ${nextVariants.length || product.variants.length} variante(s), ${product.images.length} imagem(ns) e preço inicial de ${priceText}.`,
+      message: `Encontramos ${nextVariants.length || product.variants.length} variante(s), ${product.images.length} imagem(ns) e custo inicial de ${priceText}. Defina o preço de venda antes de publicar.`,
       warnings: product.warnings,
     });
   }
@@ -197,42 +198,6 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
       <button className="button-primary"><Save size={17} /> Criar produto</button>
     </form>
   );
-}
-
-function previewToVariants(product: ProductUrlImportPreview, fallbackCurrency: string): AdminOfferVariant[] {
-  const hasSourceVariants = product.variants.length > 0;
-  const source = hasSourceVariants ? product.variants : [{
-    label: "Padrão",
-    attributes: {},
-    sourcePrice: product.sourcePrice,
-    compareAtPrice: product.compareAtPrice,
-    currency: product.currency,
-    availability: product.availability,
-    sourceUrl: product.canonicalUrl ?? product.sourceUrl,
-    imageUrl: product.images[0]?.url,
-  }];
-  return source.map((variant, index) => {
-    const sourcePrice = variant.sourcePrice ?? (hasSourceVariants ? 0 : product.sourcePrice ?? 0);
-    const availability = variant.availability === "UNKNOWN" ? "AVAILABLE" : variant.availability;
-    return {
-      label: variant.label,
-      sku: variant.sku ?? product.sku ?? "",
-      attributes: variant.attributes,
-      costPrice: 0,
-      salePrice: sourcePrice,
-      compareAtPrice: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
-      sourcePriceReference: variant.sourcePrice ?? (hasSourceVariants ? undefined : product.sourcePrice),
-      sourceCompareAtReference: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
-      sourceCurrency: variant.currency ?? product.currency ?? fallbackCurrency,
-      stock: availability === "OUT_OF_STOCK" ? 0 : 1,
-      active: availability !== "OUT_OF_STOCK",
-      availability,
-      sourceUrl: variant.sourceUrl ?? product.canonicalUrl ?? product.sourceUrl,
-      imageUrl: variant.imageUrl ?? (hasSourceVariants ? undefined : product.images[0]?.url),
-      sourcePriceMissing: hasSourceVariants && variant.sourcePrice == null,
-      isDefault: index === 0,
-    };
-  });
 }
 
 function formatMoney(value: number, currency: string) {

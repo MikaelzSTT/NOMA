@@ -12,6 +12,7 @@ const messages: Record<string, { tone: "error"; text: string }> = {
   error: { tone: "error", text: "Revise os campos do produto manual." },
   "invalid-supplier": { tone: "error", text: "Fornecedor inválido para o mercado selecionado." },
   "slug-in-use": { tone: "error", text: "Já existe uma oferta com este slug neste mercado." },
+  "sale-price-required": { tone: "error", text: "Defina o preço de venda da NOMA para todas as variantes ativas com custo antes de criar/publicar." },
 };
 
 export default async function NewManualProductPage({ searchParams }: Props) {

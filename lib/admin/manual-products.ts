@@ -44,7 +44,7 @@ export interface ManualOfferVariantInput {
 }
 
 export class ManualProductError extends Error {
-  constructor(readonly code: "invalid-supplier" | "slug-in-use") {
+  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required") {
     super(code);
   }
 }
@@ -79,6 +79,7 @@ export async function createManualProduct(input: ManualProductInput) {
     const sku = `MANUAL-${input.market}-${publicSlug}`.toUpperCase().slice(0, 255);
     const estimatedDelivery = deliveryLabel(input.market, input.estimatedDeliveryMinDays, input.estimatedDeliveryMaxDays);
     const variants = normalizeManualOfferVariants(input);
+    if (hasActiveVariantWithoutSalePrice(variants)) throw new ManualProductError("sale-price-required");
     const defaultVariant = variants.find((variant) => variant.isDefault) ?? variants[0];
     const discountPercent = calculateDiscount(defaultVariant.salePrice, defaultVariant.compareAtPrice);
     const images = input.images.map((url, position) => ({
@@ -188,6 +189,10 @@ export async function createManualProduct(input: ManualProductInput) {
     });
     return { productId: product.id, offerId: offer.id, market: input.market, slug: publicSlug };
   });
+}
+
+function hasActiveVariantWithoutSalePrice(variants: Array<ManualOfferVariantInput & { isDefault: boolean }>) {
+  return variants.some((variant) => variant.active && variant.costPrice > 0 && variant.salePrice <= 0);
 }
 
 async function resolveSupplier(

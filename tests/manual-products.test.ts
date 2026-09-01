@@ -156,6 +156,28 @@ describe("createManualProduct", () => {
     }));
   });
 
+  it("bloqueia criação se variante ativa com custo não tiver preço de venda", async () => {
+    await expect(createManualProduct({
+      ...baseInput,
+      variants: [
+        {
+          label: "Solteiro sem box",
+          sku: "COL-SOL-SE",
+          attributes: { tamanho: "Solteiro" },
+          costPrice: 900,
+          salePrice: 0,
+          stock: 2,
+          active: true,
+          availability: "AVAILABLE",
+          isDefault: true,
+        },
+      ],
+    })).rejects.toEqual(new ManualProductError("sale-price-required"));
+
+    expect(mocks.transaction.product.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.productMarketOffer.create).not.toHaveBeenCalled();
+  });
+
   it("rejeita fornecedor que não opera no mercado escolhido", async () => {
     mocks.transaction.supplier.findUnique.mockResolvedValue({ id: "supplier-br", name: "Fornecedor BR", adapterKey: "supplier-br", active: true, supportedMarkets: ["BR"] });
 

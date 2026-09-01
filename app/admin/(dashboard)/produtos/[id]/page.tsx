@@ -36,6 +36,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
       {raw.saved === "ok" && <div className="admin-alert success">Alterações salvas.</div>}
       {raw.saved === "created" && <div className="admin-alert success">Produto manual criado.</div>}
       {raw.saved === "error" && <div className="admin-alert error">Não foi possível validar as alterações.</div>}
+      {raw.saved === "sale-price-required" && <div className="admin-alert error">Defina o preço de venda da NOMA para todas as variantes ativas com custo antes de publicar.</div>}
       <section className="admin-panel mb-6">
         <h2>Ofertas por mercado</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

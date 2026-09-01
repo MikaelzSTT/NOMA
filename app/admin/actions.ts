@@ -101,6 +101,8 @@ const variantSchema = z.object({
 const variantsSchema = z.array(variantSchema).min(1).max(200).transform((variants) => {
   const defaultIndex = Math.max(0, variants.findIndex((variant) => variant.isDefault));
   return variants.map((variant, index) => ({ ...variant, isDefault: index === defaultIndex }));
+}).refine((variants) => variants.every((variant) => !variant.active || variant.costPrice <= 0 || variant.salePrice > 0), {
+  message: "Defina preço de venda para variantes ativas com custo.",
 });
 
 const createManualProductSchema = z.object({
@@ -140,7 +142,7 @@ export async function createManualProductAction(formData: FormData) {
     active: formData.get("active") === "true",
     variants,
   });
-  if (!parsed.success) redirect("/admin/produtos/novo?saved=error");
+  if (!parsed.success) redirect(`/admin/produtos/novo?saved=${hasPendingSalePriceIssue(parsed.error) ? "sale-price-required" : "error"}`);
 
   let created: Awaited<ReturnType<typeof createManualProduct>>;
   try {
@@ -208,7 +210,7 @@ export async function updateInternalProductAction(formData: FormData) {
     active: formData.get("active") === "true",
     featured: formData.get("featured") === "true",
   });
-  if (!parsed.success) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=error`);
+  if (!parsed.success) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=${hasPendingSalePriceIssue(parsed.error) ? "sale-price-required" : "error"}`);
   const {
     id,
     market,
@@ -397,4 +399,8 @@ function parseVariants(formData: FormData) {
   } catch {
     return null;
   }
+}
+
+function hasPendingSalePriceIssue(error: z.ZodError) {
+  return error.issues.some((issue) => issue.message === "Defina preço de venda para variantes ativas com custo.");
 }

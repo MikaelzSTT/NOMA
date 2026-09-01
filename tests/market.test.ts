@@ -53,6 +53,7 @@ describe("mercados públicos", () => {
     await expect(getProductBySlug({ slug: "missing", market: "US" })).resolves.toBeNull();
     const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
     expect(product).not.toHaveProperty("costPrice");
+    expect(product?.variants[0]).not.toHaveProperty("costPrice");
   });
 
   it("preferência manual em cookie vence detecção automática", () => {
@@ -133,6 +134,20 @@ function offerRow(market: "BR" | "US", slug: string, currency: "BRL" | "USD", se
       images: [{ id: "image-1", url: "/images/noma/products.webp", alt: "Sofa", position: 0 }],
       variants: [],
     },
+    variants: [{
+      id: `variant-${market}`,
+      label: "Padrão",
+      sku: "SKU-1-A",
+      attributes: { tamanho: "Casal" },
+      costPrice: market === "US" ? 900 : 4000,
+      salePrice: sellingPrice,
+      compareAtPrice: null,
+      stock: 3,
+      availability: "AVAILABLE",
+      imageUrl: null,
+      isDefault: true,
+      position: 0,
+    }],
   };
 }
 

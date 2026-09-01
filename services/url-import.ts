@@ -63,7 +63,7 @@ export async function confirmUrlProduct(supplierId: string, candidate: Normalize
   if (product.sourceUrl && adapter.supportsUrl && !adapter.supportsUrl(new URL(product.sourceUrl))) {
     throw new Error("A URL de origem não pertence ao adapter selecionado.");
   }
-  const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: product.sellingPrice != null });
+  const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: true });
   await db.importJob.create({
     data: {
       type: "URL",
@@ -155,7 +155,7 @@ export async function commitImportJobPreviews(jobId: string, inputs: CommitPrevi
       });
       const market = item.job.market as Market;
       const { supplier } = await identifySupplierAdapter(product.sourceUrl ?? item.sourceRef ?? "", market);
-      const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: product.sellingPrice != null });
+      const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: true });
       savedProducts.push({ id: saved.id, slug: saved.slug });
       await db.importItem.update({
         where: { id: item.id },

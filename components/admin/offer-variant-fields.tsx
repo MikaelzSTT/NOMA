@@ -16,6 +16,7 @@ export interface AdminOfferVariant {
   sourceCompareAtReference?: number;
   sourceCurrency?: string;
   sourcePriceMissing?: boolean;
+  salePricePending?: boolean;
   stock: number;
   active: boolean;
   availability: Availability;
@@ -99,7 +100,7 @@ export function OfferVariantFields({
               <TextField label="Nome/label" value={variant.label} required onChange={(value) => patchVariant(index, { label: value })} />
               <TextField label="SKU opcional" value={variant.sku ?? ""} onChange={(value) => patchVariant(index, { sku: value })} />
               <MoneyField label={`Custo (${currency})`} value={variant.costPrice} required onChange={(value) => patchVariant(index, { costPrice: value ?? 0 })} />
-              <MoneyField label={`Preço de venda (${currency})`} value={variant.salePrice} required onChange={(value) => patchVariant(index, { salePrice: value ?? 0 })} />
+              <MoneyField label={`Preço de venda (${currency})`} value={variant.salePrice} required pending={isSalePricePending(variant)} onChange={(value) => patchVariant(index, { salePrice: value ?? 0, salePricePending: false })} />
               <MoneyField label={`Preço comparativo (${currency})`} value={variant.compareAtPrice} onChange={(value) => patchVariant(index, { compareAtPrice: value })} />
               <NumberField label="Estoque" value={variant.stock} required integer onChange={(value) => patchVariant(index, { stock: value ?? 0 })} />
               <label className="admin-field">Disponibilidade<select value={variant.availability} onChange={(event) => patchVariant(index, { availability: event.target.value as Availability })}>{availabilityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -107,8 +108,13 @@ export function OfferVariantFields({
             </div>
             {variant.sourcePriceReference != null && (
               <p className="mt-3 rounded-sm border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted">
-                Preço encontrado na fonte: {formatReferenceMoney(variant.sourcePriceReference, variant.sourceCurrency ?? currency)}
+                Custo encontrado na fonte: {formatReferenceMoney(variant.sourcePriceReference, variant.sourceCurrency ?? currency)}
                 {variant.sourceCompareAtReference != null ? ` (comparativo ${formatReferenceMoney(variant.sourceCompareAtReference, variant.sourceCurrency ?? currency)})` : ""}. O custo permanece separado.
+              </p>
+            )}
+            {isSalePricePending(variant) && (
+              <p className="mt-3 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                Defina o preço de venda da NOMA antes de publicar. O preço do fornecedor foi preenchido apenas como custo.
               </p>
             )}
             {variant.sourcePriceMissing && (
@@ -150,6 +156,7 @@ function blankVariant(index: number): EditableVariant {
     sourcePriceReference: undefined,
     sourceCompareAtReference: undefined,
     sourceCurrency: undefined,
+    salePricePending: false,
     stock: 1,
     active: true,
     availability: "AVAILABLE",
@@ -176,6 +183,10 @@ function toSerializedVariant(variant: EditableVariant) {
   };
 }
 
+function isSalePricePending(variant: EditableVariant) {
+  return variant.active && variant.costPrice > 0 && variant.salePrice <= 0;
+}
+
 function parseAttributes(value: string) {
   try {
     const parsed = JSON.parse(value || "{}") as unknown;
@@ -195,12 +206,12 @@ function TextField({ label, value, required, onChange }: { label: string; value:
   return <label className="admin-field">{label}<input value={value} required={required} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
-function MoneyField({ label, value, required, onChange }: { label: string; value?: number; required?: boolean; onChange: (value?: number) => void }) {
-  return <NumberField label={label} value={value} required={required} onChange={onChange} />;
+function MoneyField({ label, value, required, pending, onChange }: { label: string; value?: number; required?: boolean; pending?: boolean; onChange: (value?: number) => void }) {
+  return <NumberField label={label} value={value} required={required} pending={pending} onChange={onChange} />;
 }
 
-function NumberField({ label, value, integer, required, onChange }: { label: string; value?: number; integer?: boolean; required?: boolean; onChange: (value?: number) => void }) {
-  return <label className="admin-field">{label}<input type="number" min="0" step={integer ? "1" : "0.01"} required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></label>;
+function NumberField({ label, value, integer, required, pending, onChange }: { label: string; value?: number; integer?: boolean; required?: boolean; pending?: boolean; onChange: (value?: number) => void }) {
+  return <label className="admin-field">{label}<input className={pending ? "border-red-400 bg-red-50" : undefined} type="number" min="0" step={integer ? "1" : "0.01"} required={required} value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></label>;
 }
 
 function formatReferenceMoney(value: number, currency: string) {
