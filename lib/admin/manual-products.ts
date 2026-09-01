@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { calculateNomaBrSalePrice } from "@/lib/catalog/pricing";
 import { MARKET_CONFIG, type Market } from "@/lib/market";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
 import { calculateDiscount, slugify } from "@/lib/utils";
@@ -25,6 +26,7 @@ export interface ManualProductInput {
   estimatedDeliveryMaxDays: number;
   featured: boolean;
   active: boolean;
+  manualPriceOverride?: boolean;
   variants?: ManualOfferVariantInput[];
 }
 
@@ -35,6 +37,7 @@ export interface ManualOfferVariantInput {
   costPrice: number;
   salePrice: number;
   compareAtPrice?: number;
+  manualPriceOverride?: boolean;
   stock: number;
   active: boolean;
   availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN";
@@ -81,6 +84,7 @@ export async function createManualProduct(input: ManualProductInput) {
     const variants = normalizeManualOfferVariants(input);
     if (hasActiveVariantWithoutSalePrice(variants)) throw new ManualProductError("sale-price-required");
     const defaultVariant = variants.find((variant) => variant.isDefault) ?? variants[0];
+    const manualPriceOverride = variants.some((variant) => variant.manualPriceOverride);
     const discountPercent = calculateDiscount(defaultVariant.salePrice, defaultVariant.compareAtPrice);
     const images = input.images.map((url, position) => ({
       url,
@@ -114,7 +118,7 @@ export async function createManualProduct(input: ManualProductInput) {
         source: supplier.adapterKey,
         active: input.active,
         featured: input.featured,
-        manualPriceOverride: true,
+        manualPriceOverride,
         popularityScore: input.featured ? 100 : 0,
         syncStatus: "SYNCED",
         lastPriceSyncAt: now,
@@ -151,7 +155,7 @@ export async function createManualProduct(input: ManualProductInput) {
         active: input.active,
         featured: input.featured,
         popularityScore: input.featured ? 100 : 0,
-        manualPriceOverride: true,
+        manualPriceOverride,
         syncStatus: "SYNCED",
         lastPriceSyncAt: now,
         lastStockSyncAt: now,
@@ -164,6 +168,7 @@ export async function createManualProduct(input: ManualProductInput) {
             costPrice: variant.costPrice,
             salePrice: variant.salePrice,
             compareAtPrice: variant.compareAtPrice ?? null,
+            manualPriceOverride: variant.manualPriceOverride ?? true,
             stock: variant.stock,
             active: variant.active,
             availability: variant.availability,
@@ -252,6 +257,7 @@ function normalizeManualOfferVariants(input: ManualProductInput): Array<ManualOf
     costPrice: input.costPrice,
     salePrice: input.sellingPrice,
     compareAtPrice: input.compareAtPrice,
+    manualPriceOverride: input.manualPriceOverride ?? true,
     stock: input.stock,
     active: true,
     availability: input.availability,
@@ -260,18 +266,25 @@ function normalizeManualOfferVariants(input: ManualProductInput): Array<ManualOf
     isDefault: true,
   }];
   const defaultIndex = Math.max(0, sourceVariants.findIndex((variant) => variant.isDefault));
-  return sourceVariants.map((variant, index) => ({
-    label: variant.label,
-    sku: variant.sku,
-    attributes: variant.attributes,
-    costPrice: variant.costPrice,
-    salePrice: variant.salePrice,
-    compareAtPrice: variant.compareAtPrice,
-    stock: variant.stock,
-    active: variant.active,
-    availability: variant.availability,
-    sourceUrl: variant.sourceUrl ? normalizeSourceUrl(variant.sourceUrl) : undefined,
-    imageUrl: variant.imageUrl,
-    isDefault: index === defaultIndex,
-  }));
+  return sourceVariants.map((variant, index) => {
+    const manualPriceOverride = variant.manualPriceOverride ?? true;
+    const salePrice = !manualPriceOverride && input.market === "BR" && variant.costPrice > 0
+      ? calculateNomaBrSalePrice({ costPrice: variant.costPrice, compareAtPrice: variant.compareAtPrice }).salePrice
+      : variant.salePrice;
+    return {
+      label: variant.label,
+      sku: variant.sku,
+      attributes: variant.attributes,
+      costPrice: variant.costPrice,
+      salePrice,
+      compareAtPrice: variant.compareAtPrice,
+      manualPriceOverride,
+      stock: variant.stock,
+      active: variant.active,
+      availability: variant.availability,
+      sourceUrl: variant.sourceUrl ? normalizeSourceUrl(variant.sourceUrl) : undefined,
+      imageUrl: variant.imageUrl,
+      isDefault: index === defaultIndex,
+    };
+  });
 }

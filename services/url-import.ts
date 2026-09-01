@@ -11,6 +11,7 @@ import type { DiscoveredSupplierProduct, NormalizedSupplierProduct } from "@/sup
 interface CommitPreviewInput {
   itemId: string;
   product: NormalizedSupplierProduct;
+  manualPriceOverride?: boolean;
 }
 
 export async function previewProductUrl(rawUrl: string, market: Market = "BR") {
@@ -155,7 +156,7 @@ export async function commitImportJobPreviews(jobId: string, inputs: CommitPrevi
       });
       const market = item.job.market as Market;
       const { supplier } = await identifySupplierAdapter(product.sourceUrl ?? item.sourceRef ?? "", market);
-      const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: true });
+      const saved = await upsertCatalogProduct(supplier, product, { market, manualPriceOverride: input.manualPriceOverride ?? true });
       savedProducts.push({ id: saved.id, slug: saved.slug });
       await db.importItem.update({
         where: { id: item.id },

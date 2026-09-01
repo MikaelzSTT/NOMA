@@ -45,6 +45,6 @@ describe("sincronização multi-fornecedor", () => {
     expect(result).toMatchObject({ processed: 6, succeeded: 6, failed: 0 });
     expect(mocks.transaction.product.create).toHaveBeenCalledTimes(6);
     expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledTimes(6);
-    expect(mocks.transaction.priceHistory.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ sellingPrice: 8940, costPrice: expect.any(Number) }) }));
+    expect(mocks.transaction.priceHistory.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ sellingPrice: 5690, costPrice: expect.any(Number) }) }));
   });
 });

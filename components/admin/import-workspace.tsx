@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CheckSquare, FileSpreadsheet, Link2, ListChecks, ListPlus, LoaderCircle, Upload } from "lucide-react";
+import { Calculator, CheckSquare, FileSpreadsheet, Link2, ListChecks, ListPlus, LoaderCircle, Upload } from "lucide-react";
+import { calculateGrossMargin, calculateNomaBrSalePrice } from "@/lib/catalog/pricing";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 
 type SupplierOption = { id: string; name: string; supportedMarkets: Market[] };
@@ -14,9 +15,10 @@ type EditableProduct = {
   category: string; categorySlug?: string; subcategory?: string; brand?: string;
   images: Array<{ url: string; alt?: string; isPrimary?: boolean }>;
   costPrice?: number; sellingPrice?: number; compareAtPrice?: number; currency: string; stock: number;
+  manualPriceOverride?: boolean;
   availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN" | "REMOVED";
   shippingCost?: number; estimatedDelivery?: string; sourceUrl?: string;
-  variants: Array<{ supplierVariantId?: string; sku: string; title: string; options: Record<string, string>; costPrice?: number; sellingPrice?: number; stock: number; active?: boolean }>;
+  variants: Array<{ supplierVariantId?: string; sku: string; title: string; options: Record<string, string>; costPrice?: number; sellingPrice?: number; stock: number; active?: boolean; manualPriceOverride?: boolean }>;
   attributes: Record<string, string | number | boolean>; active: boolean; featured: boolean;
 };
 type Job = {
@@ -115,7 +117,7 @@ export function ImportWorkspace({ suppliers, templates, recentJobs }: { supplier
 
   async function confirmJobPreviews() {
     if (!job) return;
-    const items = Object.entries(previewProducts).map(([itemId, product]) => ({ itemId, product }));
+    const items = Object.entries(previewProducts).map(([itemId, product]) => ({ itemId, product, manualPriceOverride: product.manualPriceOverride ?? true }));
     if (items.length === 0) return setBatchMessage("Nenhum preview disponível para salvar.");
     setBusy(true); setBatchMessage("");
     const response = await fetch(`/api/admin/import/jobs/${job.id}/commit`, {
@@ -230,19 +232,97 @@ function ProductPreviewEditor({ product, heading, onChange }: { product: Editabl
   const markup = product.costPrice && product.sellingPrice ? round(product.sellingPrice / product.costPrice, 4) : undefined;
   const margin = product.costPrice && product.sellingPrice ? round(((product.sellingPrice - product.costPrice) / product.sellingPrice) * 100, 2) : undefined;
   const patch = <K extends keyof EditableProduct>(key: K, value: EditableProduct[K]) => onChange({ ...product, [key]: value });
+  const supportsNomaPricing = product.currency === "BRL";
+  const calculated = supportsNomaPricing && product.costPrice != null && product.costPrice > 0
+    ? calculateNomaBrSalePrice({ costPrice: product.costPrice, compareAtPrice: product.compareAtPrice })
+    : null;
+  const selectedMargin = product.costPrice != null && product.sellingPrice != null ? calculateGrossMargin(product.costPrice, product.sellingPrice) : null;
+
+  function calculateProductPrices() {
+    const defaultCost = product.costPrice ?? product.variants.find((variant) => variant.costPrice != null)?.costPrice;
+    const sellingPrice = defaultCost != null && defaultCost > 0
+      ? calculateNomaBrSalePrice({ costPrice: defaultCost, compareAtPrice: product.compareAtPrice }).salePrice
+      : product.sellingPrice;
+    onChange({
+      ...product,
+      sellingPrice,
+      manualPriceOverride: false,
+      variants: product.variants.map((variant) => {
+        const costPrice = variant.costPrice ?? product.costPrice;
+        if (costPrice == null || costPrice <= 0) return variant;
+        return {
+          ...variant,
+          sellingPrice: calculateNomaBrSalePrice({ costPrice, compareAtPrice: product.compareAtPrice }).salePrice,
+          manualPriceOverride: false,
+        };
+      }),
+    });
+  }
+
+  function patchVariant(index: number, patchValue: Partial<EditableProduct["variants"][number]>) {
+    onChange({
+      ...product,
+      manualPriceOverride: true,
+      variants: product.variants.map((variant, currentIndex) => currentIndex === index ? { ...variant, ...patchValue, manualPriceOverride: true } : variant),
+    });
+  }
+
   return <div className="mt-6 space-y-4 border-t border-border pt-5">
-    <p className="truncate text-xs font-bold uppercase text-muted">Preview · {heading}</p>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="truncate text-xs font-bold uppercase text-muted">Preview · {heading}</p>
+      {supportsNomaPricing && <button type="button" className="button-secondary" onClick={calculateProductPrices}><Calculator size={17} /> Calcular preços NOMA</button>}
+    </div>
     <div className="grid gap-4 sm:grid-cols-2">
       <TextField label="Título" value={product.title} onChange={(value) => patch("title", value)} />
       <TextField label="Categoria" value={product.category} onChange={(value) => patch("category", value)} />
       <TextField label="Subcategoria" value={product.subcategory ?? ""} onChange={(value) => patch("subcategory", value)} />
       <TextField label="Marca" value={product.brand ?? ""} onChange={(value) => patch("brand", value)} />
       <NumberField label="Custo do fornecedor" value={product.costPrice} onChange={(value) => patch("costPrice", value)} />
-      <NumberField label="Markup" value={markup} onChange={(value) => patch("sellingPrice", product.costPrice != null && value != null ? round(product.costPrice * value, 2) : product.sellingPrice)} />
-      <NumberField label="Margem (%)" value={margin} onChange={(value) => patch("sellingPrice", product.costPrice != null && value != null && value < 100 ? round(product.costPrice / (1 - value / 100), 2) : product.sellingPrice)} />
-      <NumberField label="Preço final" value={product.sellingPrice} onChange={(value) => patch("sellingPrice", value)} />
+      <NumberField label="Preço comparativo" value={product.compareAtPrice} onChange={(value) => patch("compareAtPrice", value)} />
+      <NumberField label="Markup" value={markup} onChange={(value) => onChange({ ...product, sellingPrice: product.costPrice != null && value != null ? round(product.costPrice * value, 2) : product.sellingPrice, manualPriceOverride: true })} />
+      <NumberField label="Margem (%)" value={margin} onChange={(value) => onChange({ ...product, sellingPrice: product.costPrice != null && value != null && value < 100 ? round(product.costPrice / (1 - value / 100), 2) : product.sellingPrice, manualPriceOverride: true })} />
+      <NumberField label="Preço final" value={product.sellingPrice} onChange={(value) => onChange({ ...product, sellingPrice: value, manualPriceOverride: true })} />
       <NumberField label="Estoque" value={product.stock} integer onChange={(value) => patch("stock", value ?? 0)} />
     </div>
+    {calculated && (
+      <div className="grid gap-3 rounded-sm border border-border bg-surface p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Custo" value={formatMoney(product.costPrice ?? 0, product.currency)} />
+        <Metric label="Preço calculado" value={formatMoney(calculated.salePrice, product.currency)} />
+        <Metric label="Diferença bruta" value={selectedMargin ? formatMoney(selectedMargin.grossProfit, product.currency) : "Sem preço"} />
+        <Metric label="Margem bruta aprox." value={selectedMargin ? formatPercent(selectedMargin.grossMarginPercent) : "Sem preço"} />
+      </div>
+    )}
+    {calculated?.needsManualReview && <div className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Margem abaixo da regra esperada. Revise manualmente este produto antes de salvar.</div>}
+    {product.variants.length > 0 && (
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase text-muted">Variantes</p>
+        {product.variants.map((variant, index) => {
+          const costPrice = variant.costPrice ?? product.costPrice ?? 0;
+          const variantCalculated = supportsNomaPricing && costPrice > 0 ? calculateNomaBrSalePrice({ costPrice, compareAtPrice: product.compareAtPrice }) : null;
+          const variantMargin = variant.sellingPrice != null ? calculateGrossMargin(costPrice, variant.sellingPrice) : null;
+          return (
+            <div key={variant.sku || variant.supplierVariantId || index} className="rounded-sm border border-border p-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <TextField label="Variante" value={variant.title} onChange={(value) => patchVariant(index, { title: value })} />
+                <NumberField label="Custo" value={costPrice} onChange={(value) => patchVariant(index, { costPrice: value })} />
+                <NumberField label="Preço final" value={variant.sellingPrice} onChange={(value) => patchVariant(index, { sellingPrice: value })} />
+                <NumberField label="Estoque" value={variant.stock} integer onChange={(value) => patchVariant(index, { stock: value ?? 0 })} />
+                <label className="check-row self-end pb-3"><input type="checkbox" checked={variant.active ?? true} onChange={(event) => patchVariant(index, { active: event.target.checked })} />Ativa</label>
+              </div>
+              {variantCalculated && (
+                <div className="mt-3 grid gap-3 rounded-sm border border-border bg-surface p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <Metric label="Custo" value={formatMoney(costPrice, product.currency)} />
+                  <Metric label="Preço calculado" value={formatMoney(variantCalculated.salePrice, product.currency)} />
+                  <Metric label="Diferença bruta" value={variantMargin ? formatMoney(variantMargin.grossProfit, product.currency) : "Sem preço"} />
+                  <Metric label="Margem bruta aprox." value={variantMargin ? formatPercent(variantMargin.grossMarginPercent) : "Sem preço"} />
+                </div>
+              )}
+              {variantCalculated?.needsManualReview && <div className="mt-3 rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Margem abaixo da regra esperada. Revise manualmente esta variante.</div>}
+            </div>
+          );
+        })}
+      </div>
+    )}
     <label className="admin-field">Descrição<textarea rows={4} value={product.description ?? ""} onChange={(event) => patch("description", event.target.value)} /></label>
     <label className="admin-field">Imagens (uma URL por linha)<textarea rows={4} value={product.images.map((image) => image.url).join("\n")} onChange={(event) => patch("images", event.target.value.split(/\r?\n/).map((imageUrl) => imageUrl.trim()).filter(Boolean).map((imageUrl, index) => ({ url: imageUrl, isPrimary: index === 0 })))} /></label>
   </div>;
@@ -267,3 +347,6 @@ function coercePreviewProduct(value: unknown): EditableProduct | null {
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="admin-field">{label}<input value={value} onChange={(event) => onChange(event.target.value)} /></label>; }
 function NumberField({ label, value, integer, onChange }: { label: string; value?: number; integer?: boolean; onChange: (value?: number) => void }) { return <label className="admin-field">{label}<input type="number" min="0" step={integer ? "1" : "0.01"} value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></label>; }
 function round(value: number, decimals: number) { return Number(value.toFixed(decimals)); }
+function Metric({ label, value }: { label: string; value: string }) { return <div><p className="font-bold uppercase text-muted">{label}</p><p className="mt-1 text-sm font-extrabold text-ink">{value}</p></div>; }
+function formatMoney(value: number, currency: string) { return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", { style: "currency", currency }).format(value); }
+function formatPercent(value: number) { return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value)}%`; }

@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { calculateSellingPrice } from "@/lib/catalog/pricing";
+import { calculateNomaBrSalePrice, calculateSellingPrice } from "@/lib/catalog/pricing";
 import type { NormalizedSupplierProduct } from "@/lib/catalog/supplier-types";
 import { canonicalProductHash } from "@/lib/catalog/product-hash";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
@@ -77,6 +77,13 @@ export async function upsertCatalogProductInTransaction(
       manualPriceOverride: true,
       pricingRuleType: true,
       pricingRuleValue: true,
+      variants: {
+        select: {
+          sku: true,
+          salePrice: true,
+          manualPriceOverride: true,
+        },
+      },
       removedAt: true,
       product: { select: { id: true, slug: true, archivedAt: true } },
     },
@@ -137,13 +144,16 @@ export async function upsertCatalogProductInTransaction(
         roundingIncrement: catalogRule.roundingIncrement ? Number(catalogRule.roundingIncrement) : null,
       }
     : null);
+  const nomaBrAutomaticPrice = market === "BR" && parsed.costPrice != null
+    ? calculateNomaBrSalePrice({ costPrice: parsed.costPrice, compareAtPrice: parsed.compareAtPrice }).salePrice
+    : undefined;
   const sellingPrice = manualPriceOverride
     ? hasExplicitManualPrice
       ? parsed.sellingPrice ?? (existingOffer?.sellingPrice == null ? undefined : Number(existingOffer.sellingPrice))
       : existingOffer?.sellingPrice == null ? parsed.sellingPrice : Number(existingOffer.sellingPrice)
-    : parsed.costPrice != null && automaticRule
+    : nomaBrAutomaticPrice ?? (parsed.costPrice != null && automaticRule
       ? calculateSellingPrice(parsed.costPrice, automaticRule)
-      : parsed.sellingPrice;
+      : parsed.sellingPrice);
   const compareAtPrice = parsed.compareAtPrice;
   const priceChanged = sellingPrice != null
     && (existingOffer?.sellingPrice == null || Number(existingOffer.sellingPrice) !== sellingPrice);
@@ -173,6 +183,37 @@ export async function upsertCatalogProductInTransaction(
     stock: variant.stock,
     active: variant.active,
   }));
+  const offerVariants = parsed.variants.map((variant, index) => {
+    const costPrice = variant.costPrice ?? parsed.costPrice ?? 0;
+    const existingVariant = existingOffer?.variants.find((item) => item.sku && item.sku === variant.sku);
+    const variantManualOverride = manualPriceOverride || Boolean(existingVariant?.manualPriceOverride);
+    const salePrice = variantManualOverride
+      ? hasExplicitManualPrice
+        ? variant.sellingPrice ?? parsed.sellingPrice ?? sellingPrice ?? Number(existingVariant?.salePrice ?? 0)
+        : existingVariant?.salePrice == null ? variant.sellingPrice ?? parsed.sellingPrice ?? sellingPrice ?? 0 : Number(existingVariant.salePrice)
+      : market === "BR" && costPrice > 0
+        ? calculateNomaBrSalePrice({ costPrice, compareAtPrice }).salePrice
+        : variant.sellingPrice ?? sellingPrice ?? 0;
+    return {
+      label: variant.title,
+      sku: variant.sku,
+      attributes: {
+        ...variant.options,
+        ...(variant.supplierVariantId ? { supplierVariantId: variant.supplierVariantId } : {}),
+      } as Prisma.InputJsonValue,
+      costPrice,
+      salePrice,
+      compareAtPrice,
+      stock: variant.stock,
+      active: variant.active ?? true,
+      availability: variant.stock > 0 ? "AVAILABLE" as const : "OUT_OF_STOCK" as const,
+      sourceUrl: parsed.sourceUrl,
+      imageUrl: null,
+      isDefault: index === 0,
+      position: index,
+      manualPriceOverride: variantManualOverride,
+    };
+  });
 
   const productCommon = {
     supplierName: supplier.name,
@@ -270,6 +311,7 @@ export async function upsertCatalogProductInTransaction(
     lastStockSyncAt: now,
     lastSyncedAt: now,
     removedAt: parsed.availability === "REMOVED" ? now : null,
+    ...(offerVariants.length > 0 ? { variants: { deleteMany: {}, create: offerVariants } } : {}),
   };
 
   const savedOffer = existingOffer

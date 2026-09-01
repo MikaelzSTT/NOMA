@@ -178,6 +178,46 @@ describe("createManualProduct", () => {
     expect(mocks.transaction.productMarketOffer.create).not.toHaveBeenCalled();
   });
 
+  it("calcula preço automático NOMA para variante BR sem override manual", async () => {
+    await createManualProduct({
+      ...baseInput,
+      manualPriceOverride: false,
+      variants: [
+        {
+          label: "Padrão",
+          sku: "COL-AUTO",
+          attributes: { tamanho: "Casal" },
+          costPrice: 1000,
+          salePrice: 0,
+          compareAtPrice: 1200,
+          manualPriceOverride: false,
+          stock: 2,
+          active: true,
+          availability: "AVAILABLE",
+          isDefault: true,
+        },
+      ],
+    });
+
+    expect(mocks.transaction.product.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        sellingPrice: 1090,
+        manualPriceOverride: false,
+      }),
+    }));
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        sellingPrice: 1090,
+        manualPriceOverride: false,
+        variants: {
+          create: [
+            expect.objectContaining({ salePrice: 1090, manualPriceOverride: false }),
+          ],
+        },
+      }),
+    }));
+  });
+
   it("rejeita fornecedor que não opera no mercado escolhido", async () => {
     mocks.transaction.supplier.findUnique.mockResolvedValue({ id: "supplier-br", name: "Fornecedor BR", adapterKey: "supplier-br", active: true, supportedMarkets: ["BR"] });
 

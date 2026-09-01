@@ -27,6 +27,7 @@ const defaultVariants: AdminOfferVariant[] = [{
   attributes: {},
   costPrice: 0,
   salePrice: 0,
+  manualPriceOverride: true,
   stock: 1,
   active: true,
   availability: "AVAILABLE",

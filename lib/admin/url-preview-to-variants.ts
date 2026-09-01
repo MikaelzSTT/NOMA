@@ -24,6 +24,7 @@ export function previewToOfferVariants(product: ProductUrlImportPreview, fallbac
       costPrice: sourcePrice,
       salePrice: 0,
       compareAtPrice: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
+      manualPriceOverride: true,
       sourcePriceReference: variant.sourcePrice ?? (hasSourceVariants ? undefined : product.sourcePrice),
       sourceCompareAtReference: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
       sourceCurrency: variant.currency ?? product.currency ?? fallbackCurrency,

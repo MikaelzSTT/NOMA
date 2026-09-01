@@ -7,6 +7,7 @@ const bodySchema = z.object({
   items: z.array(z.object({
     itemId: z.string().min(1),
     product: normalizedSupplierProductSchema,
+    manualPriceOverride: z.boolean().optional(),
   })).min(1).max(500),
 });
 

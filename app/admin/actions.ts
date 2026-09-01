@@ -12,7 +12,7 @@ import { env } from "@/lib/env";
 import { MARKET_CONFIG, isMarket, type Market } from "@/lib/market";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { syncProducts } from "@/services/sync-products";
-import { calculateSellingPrice } from "@/services/pricing";
+import { calculateNomaBrSalePrice } from "@/services/pricing";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
@@ -91,6 +91,7 @@ const variantSchema = z.object({
   costPrice: requiredMoney,
   salePrice: requiredMoney,
   compareAtPrice: optionalMoney,
+  manualPriceOverride: z.boolean().default(true),
   stock: z.coerce.number().int().nonnegative(),
   active: z.boolean().default(false),
   availability: availabilitySchema,
@@ -101,9 +102,10 @@ const variantSchema = z.object({
 const variantsSchema = z.array(variantSchema).min(1).max(200).transform((variants) => {
   const defaultIndex = Math.max(0, variants.findIndex((variant) => variant.isDefault));
   return variants.map((variant, index) => ({ ...variant, isDefault: index === defaultIndex }));
-}).refine((variants) => variants.every((variant) => !variant.active || variant.costPrice <= 0 || variant.salePrice > 0), {
+}).refine((variants) => variants.every((variant) => !variant.active || variant.costPrice <= 0 || variant.salePrice > 0 || !variant.manualPriceOverride), {
   message: "Defina preço de venda para variantes ativas com custo.",
 });
+type ParsedOfferVariant = z.infer<typeof variantSchema>;
 
 const createManualProductSchema = z.object({
   market: z.string().transform((value) => value.toUpperCase()).refine(isMarket),
@@ -124,6 +126,7 @@ const createManualProductSchema = z.object({
   estimatedDeliveryMaxDays: z.coerce.number().int().nonnegative(),
   featured: z.boolean().default(false),
   active: z.boolean().default(false),
+  manualPriceOverride: z.boolean().default(true),
   variants: variantsSchema,
 }).refine((value) => value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
   path: ["estimatedDeliveryMaxDays"],
@@ -140,6 +143,7 @@ export async function createManualProductAction(formData: FormData) {
     images: String(formData.get("images") ?? "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
     featured: formData.get("featured") === "true",
     active: formData.get("active") === "true",
+    manualPriceOverride: formData.get("manualPriceOverride") === "true",
     variants,
   });
   if (!parsed.success) redirect(`/admin/produtos/novo?saved=${hasPendingSalePriceIssue(parsed.error) ? "sale-price-required" : "error"}`);
@@ -223,16 +227,14 @@ export async function updateInternalProductAction(formData: FormData) {
     ...input
   } = parsed.data;
   const currency = MARKET_CONFIG[market].currency;
-  const defaultVariant = offerVariants.find((variant) => variant.isDefault) ?? offerVariants[0];
+  const pricedOfferVariants = applyAutomaticNomaPricing(offerVariants, market);
+  const defaultVariant = pricedOfferVariants.find((variant) => variant.isDefault) ?? pricedOfferVariants[0];
+  const manualPriceOverride = pricedOfferVariants.some((variant) => variant.manualPriceOverride);
   const [category, brand] = await Promise.all([
     db.category.upsert({ where: { slug: slugify(categoryName) }, update: { name: categoryName }, create: { name: categoryName, slug: slugify(categoryName) } }),
     brandName ? db.brand.upsert({ where: { slug: slugify(brandName) }, update: { name: brandName }, create: { name: brandName, slug: slugify(brandName) } }) : null,
   ]);
-  const sellingPrice = input.manualPriceOverride
-    ? defaultVariant.salePrice
-    : defaultVariant.costPrice != null && input.pricingRuleType && input.pricingRuleValue != null
-      ? calculateSellingPrice(defaultVariant.costPrice, { type: input.pricingRuleType, value: input.pricingRuleValue })
-      : defaultVariant.salePrice;
+  const sellingPrice = defaultVariant.salePrice;
   await db.$transaction(async (transaction) => {
     const product = await transaction.product.findUnique({ where: { id }, select: { id: true, slug: true, sku: true, supplierId: true, supplierProductId: true, supplier: { select: { id: true, name: true, supportedMarkets: true } } } });
     if (!product) throw new Error("Produto não encontrado.");
@@ -257,7 +259,7 @@ export async function updateInternalProductAction(formData: FormData) {
           pricingRuleValue: input.pricingRuleValue ?? null,
           stock: defaultVariant.stock,
           availability: defaultVariant.availability,
-          manualPriceOverride: input.manualPriceOverride,
+          manualPriceOverride,
           active: input.active,
           featured: input.featured,
           popularityScore: input.popularityScore,
@@ -291,7 +293,7 @@ export async function updateInternalProductAction(formData: FormData) {
       active: input.active,
       featured: input.featured,
       popularityScore: input.popularityScore,
-      manualPriceOverride: input.manualPriceOverride,
+      manualPriceOverride,
       pricingRuleType: input.pricingRuleType ?? null,
       pricingRuleValue: input.pricingRuleValue ?? null,
       internalNotes: input.internalNotes ?? null,
@@ -305,14 +307,15 @@ export async function updateInternalProductAction(formData: FormData) {
       : await transaction.productMarketOffer.create({ data: { ...offerData, productId: id, market } });
     await transaction.productMarketOfferVariant.deleteMany({ where: { offerId: offer.id } });
     await transaction.productMarketOfferVariant.createMany({
-      data: offerVariants.map((variant, position) => ({
+      data: pricedOfferVariants.map((variant, position) => ({
         offerId: offer.id,
         label: variant.label,
         sku: variant.sku ?? null,
         attributes: variant.attributes as Prisma.InputJsonValue,
         costPrice: variant.costPrice,
-        salePrice: variant.isDefault ? sellingPrice ?? variant.salePrice : variant.salePrice,
+        salePrice: variant.salePrice,
         compareAtPrice: variant.compareAtPrice ?? null,
+        manualPriceOverride: variant.manualPriceOverride,
         stock: variant.stock,
         active: variant.active,
         availability: variant.availability,
@@ -403,4 +406,13 @@ function parseVariants(formData: FormData) {
 
 function hasPendingSalePriceIssue(error: z.ZodError) {
   return error.issues.some((issue) => issue.message === "Defina preço de venda para variantes ativas com custo.");
+}
+
+function applyAutomaticNomaPricing(variants: ParsedOfferVariant[], market: Market) {
+  if (market !== "BR") return variants;
+  return variants.map((variant) => {
+    if (variant.manualPriceOverride || variant.costPrice <= 0) return variant;
+    const calculated = calculateNomaBrSalePrice({ costPrice: variant.costPrice, compareAtPrice: variant.compareAtPrice });
+    return { ...variant, salePrice: calculated.salePrice };
+  });
 }

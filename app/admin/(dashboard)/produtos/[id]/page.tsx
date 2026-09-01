@@ -18,9 +18,6 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
   if (!product) notFound();
   const selectedMarket = typeof raw.market === "string" && isMarket(raw.market.toUpperCase()) ? raw.market.toUpperCase() as Market : "BR";
   const selectedOffer = product.offers.find((offer) => offer.market === selectedMarket);
-  const cost = selectedOffer?.costPrice == null ? null : Number(selectedOffer.costPrice);
-  const selling = selectedOffer?.sellingPrice == null ? null : Number(selectedOffer.sellingPrice);
-  const margin = cost != null && selling != null ? selling - cost : null;
   const offerImages = selectedOffer && Array.isArray(selectedOffer.images)
     ? selectedOffer.images.flatMap((item) => item && typeof item === "object" && !Array.isArray(item) && "url" in item ? [String(item.url)] : [])
     : product.images.map((image) => image.url);
@@ -68,12 +65,6 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
         <OfferVariantFields currency={MARKET_CONFIG[selectedMarket].currency} initialVariants={initialVariants} />
 
         <section className="admin-panel space-y-4">
-          <div><h2>Preço e margem</h2><p className="mt-1 text-sm text-muted">A oferta usa a variante padrão como referência. O custo é visível somente no admin.</p></div>
-          <div className="grid gap-4 sm:grid-cols-3"><label className="admin-field">Tipo de regra<select name="pricingRuleType" defaultValue={selectedOffer?.pricingRuleType ?? ""}><option value="">Sem regra por produto</option><option value="FIXED_MARGIN">Custo + margem fixa</option><option value="MARKUP">Custo × markup</option></select></label><label className="admin-field">Valor da margem/markup<input name="pricingRuleValue" type="number" min="0" step="0.0001" defaultValue={selectedOffer?.pricingRuleValue?.toString() ?? ""} /></label><ReadOnly label="Margem atual" value={margin == null ? "Não calculável" : formatMoney(margin, selectedOffer?.currency ?? product.currency)} /></div>
-          <label className="check-row"><input name="manualPriceOverride" type="checkbox" value="true" defaultChecked={selectedOffer?.manualPriceOverride ?? product.manualPriceOverride} />Preservar preço de venda como override manual</label>
-        </section>
-
-        <section className="admin-panel space-y-4">
           <h2>Entrega</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><MoneyField name="shippingCost" label="Custo de frete" value={selectedOffer?.shippingCost == null ? null : Number(selectedOffer.shippingCost)} /><label className="admin-field">Prazo mínimo<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMinDays ?? ""} /></label><label className="admin-field">Prazo máximo<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMaxDays ?? ""} /></label></div>
           <label className="admin-field">Prazo estimado<input name="estimatedDelivery" defaultValue={selectedOffer?.estimatedDelivery ?? product.estimatedDelivery ?? ""} /></label>
@@ -111,6 +102,7 @@ function toAdminOfferVariants(
       costPrice: Number(variant.costPrice),
       salePrice: Number(variant.salePrice),
       compareAtPrice: variant.compareAtPrice == null ? undefined : Number(variant.compareAtPrice),
+      manualPriceOverride: variant.manualPriceOverride || offer.manualPriceOverride,
       stock: variant.stock,
       active: variant.active,
       availability: variant.availability as AdminOfferVariant["availability"],
@@ -126,6 +118,7 @@ function toAdminOfferVariants(
     costPrice: Number(offer?.costPrice ?? product.costPrice ?? 0),
     salePrice: Number(offer?.sellingPrice ?? product.sellingPrice ?? 0),
     compareAtPrice: offer?.compareAtPrice == null && product.compareAtPrice == null ? undefined : Number(offer?.compareAtPrice ?? product.compareAtPrice),
+    manualPriceOverride: offer?.manualPriceOverride ?? true,
     stock: offer?.stockQuantity ?? product.stock,
     active: offer?.active ?? true,
     availability: (offer?.availability ?? product.availability) as AdminOfferVariant["availability"],
