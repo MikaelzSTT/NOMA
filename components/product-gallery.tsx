@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { ImageIcon } from "lucide-react";
 import { imagesWithFeaturedVariant } from "@/lib/product-gallery-images";
+import styles from "./product-detail.module.css";
 
 export function ProductGallery({ images, name, sprite, featuredImageUrl }: { images: Array<{ id: string; url: string; alt: string | null }>; name: string; sprite?: { column: number; row: number }; featuredImageUrl?: string | null }) {
   const [selected, setSelected] = useState(0);
@@ -11,20 +12,20 @@ export function ProductGallery({ images, name, sprite, featuredImageUrl }: { ima
   const current = visibleImages[selected];
 
   return (
-    <div className="product-gallery">
-      <div className="relative aspect-square overflow-hidden rounded-md border border-border bg-white">
+    <div className={styles.gallery}>
+      <div className={styles.galleryMain}>
         {current?.url === "/images/noma/products.webp" && sprite ? (
-          <div role="img" aria-label={current.alt ?? name} className="h-full w-full bg-[length:300%_200%] bg-no-repeat" style={{ backgroundImage: `url(${current.url})`, backgroundPosition: `${sprite.column * 50}% ${sprite.row * 100}%` }} />
+          <div role="img" aria-label={current.alt ?? name} className={styles.spriteImage} style={{ backgroundImage: `url(${current.url})`, backgroundPosition: `${sprite.column * 50}% ${sprite.row * 100}%` }} />
         ) : current ? (
-          <Image src={current.url} alt={current.alt ?? name} fill priority sizes="(max-width: 768px) 100vw, 50vw" className="object-contain p-4 sm:p-8" />
+          <Image src={current.url} alt={current.alt ?? name} fill preload sizes="(max-width: 820px) 100vw, 58vw" />
         ) : (
-          <div className="grid h-full place-items-center text-border-strong"><ImageIcon size={52} /></div>
+          <div className={styles.galleryEmpty}><ImageIcon size={52} /></div>
         )}
       </div>
       {visibleImages.length > 1 && (
-        <div className="mt-3 flex gap-2 overflow-x-auto">
+        <div className={styles.thumbnails}>
           {visibleImages.map((image, index) => (
-            <button key={image.id} onClick={() => setSelected(index)} className="relative size-16 shrink-0 overflow-hidden rounded-sm border bg-white data-[active=true]:border-brand" data-active={selected === index} aria-label={`Ver imagem ${index + 1}`}>
+            <button key={image.id} type="button" onClick={() => setSelected(index)} className={styles.thumbnail} data-active={selected === index} aria-label={`Ver imagem ${index + 1}`}>
               <Image src={image.url} alt="" fill sizes="64px" className="object-cover" />
             </button>
           ))}

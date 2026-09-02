@@ -20,21 +20,21 @@ const display = Manrope({
 
 export const metadata: Metadata = {
   metadataBase: new URL(absoluteUrl()),
-  title: { default: "Vitrineo | Produtos e ofertas em um so lugar", template: "%s | Vitrineo" },
-  description: "Compare produtos de fontes identificadas e compre diretamente na loja responsavel.",
-  applicationName: "Vitrineo",
+  title: { default: "Noma | Móveis e interiores", template: "%s | Noma" },
+  description: "Mobiliário, interiores e marcenaria pensados como um só projeto.",
+  applicationName: "Noma",
   manifest: "/manifest.webmanifest",
   alternates: { canonical: absoluteUrl("/") },
   openGraph: {
     type: "website",
     locale: "pt_BR",
-    siteName: "Vitrineo",
-    title: "Vitrineo | Produtos e ofertas em um so lugar",
-    description: "Compare produtos de fontes identificadas e compre diretamente na loja responsavel.",
+    siteName: "Noma",
+    title: "Noma | Móveis e interiores",
+    description: "Mobiliário, interiores e marcenaria pensados como um só projeto.",
     url: absoluteUrl("/"),
-    images: [{ url: "/images/hero-marketplace.webp", width: 1673, height: 940, alt: "Vitrineo" }],
+    images: [{ url: "/images/noma/living-room.webp", width: 1673, height: 940, alt: "Noma Interiores" }],
   },
-  twitter: { card: "summary_large_image", title: "Vitrineo", description: "Produtos e ofertas de fontes identificadas.", images: ["/images/hero-marketplace.webp"] },
+  twitter: { card: "summary_large_image", title: "Noma", description: "Móveis e interiores para uma vida mais presente.", images: ["/images/noma/living-room.webp"] },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

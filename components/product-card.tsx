@@ -48,7 +48,7 @@ export function ProductCard({ product, market = product.market }: { product: Cat
         <div className="flex min-h-48 flex-col p-3 sm:p-4">
           <p className="mb-1 text-xs font-semibold text-brand">{product.category.name}</p>
           <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-ink">{product.title}</h3>
-          <div className="mt-2"><Rating value={product.rating ? Number(product.rating) : null} count={product.reviewCount} /></div>
+          <div className="mt-2"><Rating value={product.rating ? Number(product.rating) : null} count={product.reviewCount} market={market} /></div>
           <div className="mt-auto pt-3">
             {product.compareAtPrice && product.sellingPrice && product.compareAtPrice > product.sellingPrice && (
               <p className="text-xs text-muted line-through">{formatMoney(product.compareAtPrice, product.currency, config.locale)}</p>

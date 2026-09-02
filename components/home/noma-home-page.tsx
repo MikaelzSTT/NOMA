@@ -1,15 +1,15 @@
-import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, MoveRight } from "lucide-react";
 import { HomeFooter } from "@/components/home/home-footer";
+import { HomeEntryGate } from "@/components/home/home-entry-gate";
 import { HomeHeader } from "@/components/home/home-header";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ImmersiveHouse } from "@/components/home/immersive-house";
+import { NomaProductCard } from "@/components/home/noma-product-card";
 import styles from "@/components/home/noma-home.module.css";
 import { getHomeData } from "@/lib/catalog";
-import { MARKET_CONFIG, categoryPath, productPath, searchPath, type Market } from "@/lib/market";
-import { formatMoney } from "@/lib/utils";
+import { categoryPath, searchPath, type Market } from "@/lib/market";
 
 const rooms = [
   {
@@ -61,14 +61,7 @@ const materials = [
   ["04", "Pedra", "Veios únicos, selecionados um a um"],
 ];
 
-function getDiscountLabel(sellingPrice: number | null, compareAtPrice: number | null, discountPercent: number | null) {
-  if (discountPercent && discountPercent > 0) return `${Math.round(discountPercent)}% OFF`;
-  if (!sellingPrice || !compareAtPrice || compareAtPrice <= sellingPrice) return null;
-  return `${Math.round(((compareAtPrice - sellingPrice) / compareAtPrice) * 100)}% OFF`;
-}
-
 export async function NomaHomePage({ market }: { market: Market }) {
-  const config = MARKET_CONFIG[market];
   const isUS = market === "US";
   const { products } = await getHomeData({ market });
   const categories = Array.from(
@@ -78,6 +71,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
 
   return (
       <div className={`noma-home ${styles.home}`} data-noma-home>
+      <HomeEntryGate />
       <HomeMotion />
       <HomeHeader market={market} />
       <ImmersiveHouse />
@@ -98,57 +92,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
           </div>
 
           <div className={styles.storeProductGrid} data-home-product-count={products.length}>
-            {products.map((product, index) => {
-              const image = product.images[0];
-              const discountLabel = getDiscountLabel(product.sellingPrice, product.compareAtPrice, product.discountPercent);
-              const badge = product.attributes.badge ? String(product.attributes.badge) : null;
-
-              return (
-                <article
-                  className={styles.storeProductCard}
-                  data-reveal
-                  key={product.id}
-                  style={{ transitionDelay: `${Math.min(index * 45, 180)}ms` }}
-                >
-                  <Link href={productPath(market, product.slug)} aria-label={`${isUS ? "View" : "Ver"} ${product.title}`}>
-                    <div
-                      className={styles.storeProductImage}
-                      role="img"
-                      aria-label={image?.alt ?? product.title}
-                      style={
-                        {
-                          "--product-image": `url("${image?.url ?? ""}")`,
-                          "--product-x": image?.url === "/images/noma/products.webp" ? `${Number(product.attributes.spriteColumn ?? 0) * 50}%` : "center",
-                          "--product-y": image?.url === "/images/noma/products.webp" ? `${Number(product.attributes.spriteRow ?? 0) * 100}%` : "center",
-                          "--product-size": image?.url === "/images/noma/products.webp" ? "300% 200%" : "cover",
-                        } as CSSProperties
-                      }
-                    >
-                      {discountLabel && <span className={styles.storeDiscount}>{discountLabel}</span>}
-                      {badge && <span className={styles.storeBadge}>{badge}</span>}
-                    </div>
-                    <div className={styles.storeProductBody}>
-                      <p className={styles.storeCategory}>{product.category.name}</p>
-                      <h3>{product.title}</h3>
-                      <div className={styles.storePriceRow}>
-                        {product.sellingPrice ? (
-                          <strong>{formatMoney(product.sellingPrice, product.currency, config.locale)}</strong>
-                        ) : (
-                          <strong>{isUS ? "Upon request" : "Sob consulta"}</strong>
-                        )}
-                        {product.compareAtPrice && product.sellingPrice && product.compareAtPrice > product.sellingPrice && (
-                          <span>{formatMoney(product.compareAtPrice, product.currency, config.locale)}</span>
-                        )}
-                      </div>
-                      {product.estimatedDelivery && <p className={styles.storeDelivery}>{product.estimatedDelivery}</p>}
-                      <span className={styles.storeCardCta}>
-                        {isUS ? "View product" : "Ver produto"} <ArrowUpRight aria-hidden="true" size={14} />
-                      </span>
-                    </div>
-                  </Link>
-                </article>
-              );
-            })}
+            {products.map((product, index) => <NomaProductCard key={product.id} product={product} market={market} index={index} />)}
           </div>
 
           {showCategoryRail && (
@@ -363,7 +307,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
         </div>
       </section>
 
-      <HomeFooter />
+      <HomeFooter market={market} />
     </div>
   );
 }

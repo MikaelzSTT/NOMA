@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { CatalogFilters } from "@/components/catalog-filters";
 import { CatalogResults } from "@/components/catalog-results";
 import { CatalogToolbar } from "@/components/catalog-toolbar";
 import { Pagination } from "@/components/pagination";
+import { NomaProductCard } from "@/components/home/noma-product-card";
 import { ProductDetailPurchase } from "@/components/product-detail-purchase";
-import { ProductSection } from "@/components/product-section";
+import productStyles from "@/components/product-detail.module.css";
 import { getCategory, getEquivalentProductSlug, getProductBySlug, getRelatedProducts, listProducts } from "@/lib/catalog";
 import { MARKET_CONFIG, categoryPath, collectionsPath, productPath, searchPath, type Market } from "@/lib/market";
 import { parseProductFilters, type RawSearchParams } from "@/lib/search-params";
@@ -58,50 +61,69 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
   const isUS = market === "US";
 
   return (
-    <div className="container pb-8">
+    <div className={productStyles.productPage}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
-      <Breadcrumbs market={market} items={[{ label: product.category.name, href: categoryPath(market, product.category.slug) }, { label: product.title }]} />
-      <ProductDetailPurchase
-        images={product.images}
-        name={product.title}
-        brandLabel={product.brand?.name ?? product.category.name}
-        shortDescription={product.shortDescription}
-        rating={product.rating ? Number(product.rating) : null}
-        reviewCount={product.reviewCount}
-        supplierName={product.supplier.name}
-        estimatedDelivery={product.estimatedDelivery}
-        installmentText={product.installmentText}
-        sprite={sprite}
-        market={market}
-        variants={product.variants}
-        fallback={{
-          sellingPrice: product.sellingPrice,
-          compareAtPrice: product.compareAtPrice,
-          discountPercent: product.discountPercent,
-          currency: product.currency,
-          stock: product.stock,
-          availability: product.availability,
-        }}
-      />
+      <div className={productStyles.productShell}>
+        <Breadcrumbs market={market} items={[{ label: product.category.name, href: categoryPath(market, product.category.slug) }, { label: product.title }]} />
+        <ProductDetailPurchase
+          images={product.images}
+          name={product.title}
+          brandLabel={product.brand?.name ?? product.category.name}
+          shortDescription={product.shortDescription}
+          rating={product.rating ? Number(product.rating) : null}
+          reviewCount={product.reviewCount}
+          supplierName={product.supplier.name}
+          estimatedDelivery={product.estimatedDelivery}
+          installmentText={product.installmentText}
+          sprite={sprite}
+          market={market}
+          variants={product.variants}
+          fallback={{
+            sellingPrice: product.sellingPrice,
+            compareAtPrice: product.compareAtPrice,
+            discountPercent: product.discountPercent,
+            currency: product.currency,
+            stock: product.stock,
+            availability: product.availability,
+          }}
+        />
 
-      <section className="content-band">
-        <div>
-          <p className="eyebrow">{isUS ? "About the product" : "Sobre o produto"}</p>
-          <h2>{isUS ? "Description" : "Descricao"}</h2>
-          <p className="mt-4 whitespace-pre-line text-sm leading-7 text-muted">{product.description ?? product.shortDescription ?? (isUS ? "No description provided by the source." : "Descricao nao fornecida pela fonte.")}</p>
-        </div>
-        {specs.length > 0 && (
+        <section className={productStyles.contentBand}>
           <div>
-            <p className="eyebrow">{isUS ? "Details" : "Detalhes"}</p>
-            <h2>{isUS ? "Specifications" : "Especificacoes"}</h2>
-            <dl className="mt-4 divide-y divide-border border-y border-border">
-              {specs.map(([key, value]) => <div key={key} className="grid grid-cols-2 gap-4 py-3 text-sm"><dt className="text-muted">{key}</dt><dd className="font-semibold text-ink">{String(value)}</dd></div>)}
-            </dl>
+            <p className={productStyles.sectionKicker}>{isUS ? "About the product" : "Sobre o produto"}</p>
+            <h2>{isUS ? "Description" : "Descrição"}</h2>
+            <p className={`${productStyles.longDescription} whitespace-pre-line`}>{product.description ?? product.shortDescription ?? (isUS ? "No description provided." : "Descrição não informada.")}</p>
           </div>
-        )}
-      </section>
+          {specs.length > 0 && (
+            <div>
+              <p className={productStyles.sectionKicker}>{isUS ? "Details" : "Detalhes"}</p>
+              <h2>{isUS ? "Specifications" : "Especificações"}</h2>
+              <dl className={productStyles.specifications}>
+                {specs.map(([key, value]) => <div key={key} className={productStyles.specification}><dt>{key}</dt><dd>{String(value)}</dd></div>)}
+              </dl>
+            </div>
+          )}
+        </section>
+      </div>
 
-      <ProductSection market={market} title={isUS ? "Related products" : "Produtos relacionados"} eyebrow={isUS ? "You may also like" : "Voce tambem pode gostar"} products={related} href={categoryPath(market, product.category.slug)} />
+      {related.length > 0 && (
+        <section className={productStyles.related}>
+          <div className={productStyles.productShell}>
+            <div className={productStyles.relatedHeading}>
+              <div>
+                <p className={productStyles.sectionKicker}>{isUS ? "You may also like" : "Você também pode gostar"}</p>
+                <h2>{isUS ? "Related products" : "Produtos relacionados"}</h2>
+              </div>
+              <Link className={productStyles.relatedLink} href={categoryPath(market, product.category.slug)}>
+                {isUS ? "View all" : "Ver todos"} <ArrowRight aria-hidden="true" size={14} />
+              </Link>
+            </div>
+            <div className={productStyles.relatedGrid}>
+              {related.map((relatedProduct, index) => <NomaProductCard key={relatedProduct.id} product={relatedProduct} market={market} index={index} />)}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

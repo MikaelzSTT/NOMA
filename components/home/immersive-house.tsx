@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, ArrowRight } from "lucide-react";
+import { signalNomaHeroReady, type NomaHeroReadyDetail } from "./home-entry-gate";
 import styles from "./noma-home.module.css";
 
 const ShowroomScene = dynamic(
@@ -25,6 +26,25 @@ const smoothstep = (from: number, to: number, value: number) => {
   return progress * progress * (3 - 2 * progress);
 };
 
+class SceneErrorBoundary extends Component<
+  { children: ReactNode; onError: () => void },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    this.props.onError();
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export function ImmersiveHouse() {
   const sectionRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -36,7 +56,24 @@ export function ImmersiveHouse() {
   const [sceneActive, setSceneActive] = useState(true);
   const [sceneEnabled, setSceneEnabled] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
-  const [sceneLoaderDelayElapsed, setSceneLoaderDelayElapsed] = useState(false);
+  const [fallbackEnabled, setFallbackEnabled] = useState(false);
+  const completionRef = useRef(false);
+  const fallbackLockedRef = useRef(false);
+  const fallbackReasonRef = useRef<NomaHeroReadyDetail["reason"]>("scene-error");
+
+  const finishEntry = useCallback((detail: NomaHeroReadyDetail) => {
+    if (completionRef.current) return;
+    completionRef.current = true;
+    signalNomaHeroReady(detail);
+  }, []);
+
+  const activateFallback = useCallback((reason: NonNullable<NomaHeroReadyDetail["reason"]>) => {
+    if (completionRef.current) return;
+    fallbackLockedRef.current = true;
+    fallbackReasonRef.current = reason;
+    setSceneEnabled(false);
+    setFallbackEnabled(true);
+  }, []);
 
   useEffect(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -51,7 +88,14 @@ export function ImmersiveHouse() {
     const updatePreferences = () => {
       setCompact(compactViewport.matches);
       setReducedMotion(reduceMotion.matches);
-      setSceneEnabled(supportsWebGl && !connection?.saveData);
+      if (fallbackLockedRef.current) return;
+      if (!supportsWebGl) {
+        activateFallback("unsupported");
+      } else if (connection?.saveData) {
+        activateFallback("save-data");
+      } else {
+        setSceneEnabled(true);
+      }
     };
 
     const initialFrame = window.requestAnimationFrame(updatePreferences);
@@ -64,7 +108,7 @@ export function ImmersiveHouse() {
       reduceMotion.removeEventListener("change", updatePreferences);
       compactViewport.removeEventListener("change", updatePreferences);
     };
-  }, []);
+  }, [activateFallback]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -141,14 +185,26 @@ export function ImmersiveHouse() {
 
   useEffect(() => {
     if (!sceneEnabled || sceneReady) return;
+    const timeout = window.setTimeout(() => activateFallback("scene-timeout"), 9_000);
+    return () => window.clearTimeout(timeout);
+  }, [activateFallback, sceneEnabled, sceneReady]);
 
-    const loaderDelay = window.setTimeout(() => setSceneLoaderDelayElapsed(true), 1200);
-    return () => window.clearTimeout(loaderDelay);
-  }, [sceneEnabled, sceneReady]);
+  useEffect(() => {
+    if (!sceneReady) return;
+    const reveal = window.setTimeout(() => finishEntry({ mode: "3d" }), 180);
+    return () => window.clearTimeout(reveal);
+  }, [finishEntry, sceneReady]);
+
+  useEffect(() => {
+    if (!fallbackEnabled) return;
+    const reveal = window.setTimeout(
+      () => finishEntry({ mode: "fallback", reason: fallbackReasonRef.current }),
+      1_200,
+    );
+    return () => window.clearTimeout(reveal);
+  }, [fallbackEnabled, finishEntry]);
 
   const room = rooms[activeRoom];
-  const showSceneLoader = sceneEnabled && !sceneReady && sceneLoaderDelayElapsed;
-
   return (
     <section
       className={styles.houseScroll}
@@ -159,36 +215,32 @@ export function ImmersiveHouse() {
     >
       <div className={styles.houseStage}>
         <div className={styles.sceneFallback}>
-          <Image
-            src="/images/noma/living-room.webp"
-            alt="Sala contemporânea Noma em tons naturais"
-            fill
-            loading="eager"
-            fetchPriority="high"
-            sizes="(max-aspect-ratio: 3/4) 178vh, 100vw"
-            decoding="async"
-          />
-        </div>
-
-        <div className={styles.sceneCanvas} aria-hidden="true">
-          {sceneEnabled ? (
-            <ShowroomScene
-              active={sceneActive}
-              activeRoom={activeRoom}
-              compact={compact}
-              progress={progressRef}
-              reducedMotion={reducedMotion}
-              onReady={() => setSceneReady(true)}
+          {fallbackEnabled ? (
+            <Image
+              src="/images/noma/living-room.webp"
+              alt="Sala contemporânea Noma em tons naturais"
+              fill
+              sizes="(max-aspect-ratio: 3/4) 178vh, 100vw"
+              onLoad={() => finishEntry({ mode: "fallback", reason: fallbackReasonRef.current })}
+              onError={() => finishEntry({ mode: "fallback", reason: fallbackReasonRef.current })}
             />
           ) : null}
         </div>
 
-        {showSceneLoader ? (
-          <div className={styles.sceneLoader} role="status" aria-live="polite">
-            <i aria-hidden="true" />
-            <span>Preparando o showroom</span>
-          </div>
-        ) : null}
+        <div className={styles.sceneCanvas} aria-hidden="true">
+          {sceneEnabled ? (
+            <SceneErrorBoundary onError={() => activateFallback("scene-error")}>
+              <ShowroomScene
+                active={sceneActive}
+                activeRoom={activeRoom}
+                compact={compact}
+                progress={progressRef}
+                reducedMotion={reducedMotion}
+                onReady={() => setSceneReady(true)}
+              />
+            </SceneErrorBoundary>
+          ) : null}
+        </div>
 
         <div className={styles.houseShade} aria-hidden="true" />
         <div className={styles.filmGrain} aria-hidden="true" />

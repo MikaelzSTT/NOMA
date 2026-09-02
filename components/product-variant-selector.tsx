@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, PackageCheck } from "lucide-react";
+import { Check, PackageCheck } from "lucide-react";
 import type { CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
 import { MARKET_CONFIG } from "@/lib/market";
+import { deriveVariantGroups, findVariantForAttribute, variantIsSelectable } from "@/lib/product-variants";
 import { formatMoney } from "@/lib/utils";
+import styles from "./product-detail.module.css";
 
 export function ProductVariantSelector({
   variants,
@@ -31,6 +33,7 @@ export function ProductVariantSelector({
   const [internalSelectedId, setInternalSelectedId] = useState(options.find((variant) => variant.isDefault)?.id ?? options[0]?.id ?? "");
   const activeSelectedId = selectedId ?? internalSelectedId;
   const selected = options.find((variant) => variant.id === activeSelectedId);
+  const groups = useMemo(() => deriveVariantGroups(options, market), [market, options]);
   const sellingPrice = selected?.salePrice ?? fallback.sellingPrice;
   const compareAtPrice = selected?.compareAtPrice ?? fallback.compareAtPrice;
   const discount = calculateDiscount(sellingPrice, compareAtPrice) ?? fallback.discountPercent;
@@ -41,45 +44,78 @@ export function ProductVariantSelector({
 
   return (
     <>
-      <div className="my-6 border-y border-border py-5">
+      <div className={styles.priceBlock}>
         {compareAtPrice && sellingPrice && compareAtPrice > sellingPrice && (
-          <p className="text-sm text-muted"><span className="line-through">{formatMoney(compareAtPrice, fallback.currency, locale)}</span>{discount && discount > 0 && <strong className="ml-2 text-coral">{isUS ? `Save ${Math.round(discount)}%` : `Economize ${Math.round(discount)}%`}</strong>}</p>
+          <p className={styles.comparePrice}><span>{formatMoney(compareAtPrice, fallback.currency, locale)}</span>{discount && discount > 0 && <strong>{isUS ? `Save ${Math.round(discount)}%` : `Economize ${Math.round(discount)}%`}</strong>}</p>
         )}
-        {sellingPrice ? <p className="mt-1 text-4xl font-black text-ink">{formatMoney(sellingPrice, fallback.currency, locale)}</p> : <p className="text-xl font-bold text-muted">{isUS ? "Price unavailable" : "Preco indisponivel"}</p>}
+        {sellingPrice ? <p className={styles.currentPrice}>{formatMoney(sellingPrice, fallback.currency, locale)}</p> : <p className={styles.unavailablePrice}>{isUS ? "Price unavailable" : "Preço indisponível"}</p>}
       </div>
 
       {options.length > 1 && (
-        <div className="mb-6">
-          <p className="mb-2 text-xs font-bold uppercase text-muted">{isUS ? "Options" : "Opções"}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {options.map((variant) => (
-              <button
-                key={variant.id}
-                type="button"
-                className={`variant-choice ${variant.id === activeSelectedId ? "selected" : ""}`}
-                onClick={() => {
-                  setInternalSelectedId(variant.id);
-                  onSelectVariant?.(variant);
-                }}
-              >
-                <span>{variant.label}</span>
-                {Object.keys(variant.attributes).length > 0 && <small>{variantSubtitle(variant.attributes)}</small>}
-              </button>
-            ))}
-          </div>
+        <div className={styles.variantSelector}>
+          {groups.length > 0 ? groups.map((group) => (
+            <fieldset className={styles.variantGroup} key={group.key}>
+              <legend>{group.label}</legend>
+              <div className={styles.variantOptions}>
+                {group.values.map((value) => {
+                  const candidate = findVariantForAttribute(options, groups, selected, group.key, value);
+                  const isSelected = selected ? String(selected.attributes[group.key]) === value : false;
+                  const disabled = !candidate || !variantIsSelectable(candidate);
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={styles.variantChip}
+                      data-selected={isSelected}
+                      disabled={disabled}
+                      aria-pressed={isSelected}
+                      onClick={() => candidate && selectVariant(candidate)}
+                    >
+                      {isSelected && <Check size={13} aria-hidden="true" />}
+                      <span>{value}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )) : (
+            <fieldset className={styles.variantGroup}>
+              <legend>{isUS ? "Option" : "Opção"}</legend>
+              <div className={styles.variantOptions}>
+                {options.map((variant) => {
+                  const isSelected = variant.id === activeSelectedId;
+                  return (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      className={styles.variantChip}
+                      data-selected={isSelected}
+                      disabled={!variantIsSelectable(variant)}
+                      aria-pressed={isSelected}
+                      onClick={() => selectVariant(variant)}
+                    >
+                      {isSelected && <Check size={13} aria-hidden="true" />}
+                      <span>{variant.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
         </div>
       )}
 
-      <div className="space-y-3 text-sm">
-        <p className="flex items-center gap-2"><CheckCircle2 size={17} className="text-brand" /><span>{availabilityLabel(availability, market)}</span></p>
-        <p className="flex items-center gap-2"><PackageCheck size={17} className="text-brand" /><span>{isUS ? `${stock} unit(s) in stock` : `${stock} unidade(s) em estoque`}</span></p>
+      <div className={styles.stockDetails}>
+        <p><span className={styles.statusDot} data-available={availability === "AVAILABLE" || availability === "PREORDER"} /><span>{availabilityLabel(availability, market)}</span></p>
+        {stock > 0 && <p><PackageCheck size={16} /><span>{isUS ? `${stock} unit(s) in stock` : `${stock} unidade(s) em estoque`}</span></p>}
       </div>
     </>
   );
-}
 
-function variantSubtitle(attributes: Record<string, string | number | boolean>) {
-  return Object.values(attributes).slice(0, 3).map(String).join(" · ");
+  function selectVariant(variant: CatalogProductVariant) {
+    setInternalSelectedId(variant.id);
+    onSelectVariant?.(variant);
+  }
 }
 
 function calculateDiscount(sellingPrice: number | null, compareAtPrice: number | null) {

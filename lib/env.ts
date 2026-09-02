@@ -10,6 +10,10 @@ const optionalEmail = z.preprocess(
   (value) => value === "" ? undefined : value,
   z.email().optional(),
 );
+const optionalBooleanString = z.preprocess(
+  (value) => typeof value === "string" ? value.trim().toLowerCase() : value,
+  z.enum(["true", "false"]).default("false"),
+);
 
 const environmentSchema = z.object({
   DATABASE_URL: z
@@ -20,6 +24,7 @@ const environmentSchema = z.object({
     (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
     z.string().default("http://localhost:3000"),
   ),
+  PUBLIC_MAINTENANCE_MODE: optionalBooleanString,
   SUPPLIER_CONFIG_ENCRYPTION_KEY: optionalSecret(32),
   AUTH_SECRET: optionalSecret(32),
   ADMIN_EMAIL: optionalEmail,

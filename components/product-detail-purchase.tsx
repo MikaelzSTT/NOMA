@@ -7,6 +7,7 @@ import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
 import type { CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
+import styles from "./product-detail.module.css";
 
 interface ProductDetailPurchaseProps {
   images: Array<{ id: string; url: string; alt: string | null }>;
@@ -50,13 +51,13 @@ export function ProductDetailPurchase({
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant);
 
   return (
-    <section className="product-detail">
+    <section className={styles.productDetail}>
       <ProductGallery key={selectedVariant?.imageUrl ?? "general-gallery"} images={images} name={name} sprite={sprite} featuredImageUrl={selectedVariant?.imageUrl} />
-      <div className="product-summary">
-        <p className="eyebrow">{brandLabel}</p>
-        <h1>{name}</h1>
-        <div className="mt-3"><Rating value={rating} count={reviewCount} /></div>
-        <p className="mt-5 text-sm leading-6 text-muted">{shortDescription}</p>
+      <div className={styles.summary}>
+        <p className={styles.brand}>{brandLabel}</p>
+        <h1 className={styles.title}>{name}</h1>
+        <div className={styles.rating}><Rating value={rating} count={reviewCount} market={market} /></div>
+        {shortDescription && <p className={styles.description}>{shortDescription}</p>}
         <ProductVariantSelector
           market={market}
           variants={variants}
@@ -64,12 +65,12 @@ export function ProductDetailPurchase({
           onSelectVariant={setSelectedVariant}
           fallback={fallback}
         />
-        {installmentText && <p className="mt-2 text-sm text-muted">{installmentText}</p>}
-        <div className="mt-3 space-y-3 text-sm">
-          <p className="flex items-center gap-2"><Store size={17} className="text-brand" /><span>{market === "US" ? "Supplier" : "Fornecedor"} <strong>{supplierName}</strong></span></p>
-          {estimatedDelivery && <p className="flex items-center gap-2 text-muted"><Clock3 size={17} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {estimatedDelivery}</span></p>}
+        {installmentText && <p className={styles.installments}>{installmentText}</p>}
+        <div className={styles.commerceDetails}>
+          <p><Store size={16} /><span>{market === "US" ? "Supplied by" : "Fornecido por"} <strong>{supplierName}</strong></span></p>
+          {estimatedDelivery && <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {estimatedDelivery}</span></p>}
         </div>
-        <button disabled className="button-buy opacity-60">{market === "US" ? "Checkout coming in a future step" : "Compra disponível em uma próxima etapa"}</button>
+        <button disabled className={styles.buyButton}>{market === "US" ? "Available soon" : "Comprar em breve"}</button>
       </div>
     </section>
   );
