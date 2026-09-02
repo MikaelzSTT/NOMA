@@ -1,0 +1,136 @@
+.page {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: #f5f2ec;
+  color: #191916;
+}
+
+.header,
+.footer {
+  width: min(100% - 2rem, 1120px);
+  margin-inline: auto;
+}
+
+.header {
+  display: flex;
+  min-height: 5.5rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(25, 25, 22, 0.12);
+}
+
+.brand {
+  font-family: var(--font-display), Arial, Helvetica, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.market {
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  color: rgba(25, 25, 22, 0.58);
+}
+
+.main {
+  width: min(100% - 2rem, 1120px);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 3rem;
+  padding-block: 3rem;
+}
+
+.copy {
+  max-width: 38rem;
+}
+
+.kicker {
+  margin-bottom: 1.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6f6658;
+}
+
+.title {
+  font-family: var(--font-display), Arial, Helvetica, sans-serif;
+  font-size: clamp(2.45rem, 8vw, 5.9rem);
+  font-weight: 650;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.subtitle {
+  margin-top: 1.7rem;
+  max-width: 33rem;
+  font-size: clamp(1rem, 2vw, 1.22rem);
+  line-height: 1.7;
+  color: rgba(25, 25, 22, 0.68);
+}
+
+.soon {
+  margin-top: 2rem;
+  font-size: 0.78rem;
+  font-weight: 820;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.visual {
+  min-height: 20rem;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background:
+    linear-gradient(180deg, rgba(245, 242, 236, 0) 0%, rgba(245, 242, 236, 0.32) 100%),
+    url("/images/noma/living-room.webp") center / cover;
+  box-shadow: 0 28px 80px rgba(25, 25, 22, 0.13);
+}
+
+.visual::after {
+  content: "";
+  position: absolute;
+  inset: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.footer {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  border-top: 1px solid rgba(25, 25, 22, 0.12);
+  font-size: 0.72rem;
+  color: rgba(25, 25, 22, 0.5);
+}
+
+@media (min-width: 860px) {
+  .main {
+    grid-template-columns: minmax(0, 0.95fr) minmax(18rem, 0.72fr);
+    padding-block: 4rem;
+  }
+
+  .visual {
+    min-height: min(62svh, 36rem);
+  }
+}
+
+@media (max-width: 520px) {
+  .header,
+  .footer,
+  .main {
+    width: min(100% - 1.25rem, 1120px);
+  }
+
+  .header {
+    min-height: 4.5rem;
+  }
+
+  .visual {
+    min-height: 14rem;
+  }
+}

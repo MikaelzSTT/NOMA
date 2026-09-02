@@ -459,3 +459,26 @@ model SyncLock {
 
   @@index([acquiredUntil])
 }
+
+model NomaTrafficVisit {
+  id               String   @id @default(cuid())
+  visitedAt        DateTime @default(now())
+  market           Market
+  pathname         String   @db.VarChar(600)
+  referrer         String?  @db.VarChar(600)
+  utmSource        String?  @db.VarChar(255)
+  utmMedium        String?  @db.VarChar(255)
+  utmCampaign      String?  @db.VarChar(255)
+  utmContent       String?  @db.VarChar(255)
+  utmTerm          String?  @db.VarChar(255)
+  gclid            String?  @db.VarChar(255)
+  userAgentSummary String?  @db.VarChar(255)
+  sessionHash      String?  @db.VarChar(64)
+  dedupeKey        String   @unique @db.VarChar(64)
+
+  @@index([visitedAt])
+  @@index([market, visitedAt])
+  @@index([utmSource, visitedAt])
+  @@index([utmCampaign, visitedAt])
+  @@index([gclid, visitedAt])
+}

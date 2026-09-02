@@ -1,13 +1,35 @@
 import type { NextConfig } from "next";
 
 const isDevelopment = process.env.NODE_ENV === "development";
+const hasGoogleTracking = Boolean(
+  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()
+  || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim(),
+);
+const scriptSources = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isDevelopment ? ["'unsafe-eval'"] : []),
+  ...(hasGoogleTracking ? ["https://www.googletagmanager.com"] : []),
+];
+const connectSources = [
+  "'self'",
+  ...(hasGoogleTracking
+    ? [
+      "https://www.google-analytics.com",
+      "https://region1.google-analytics.com",
+      "https://www.googletagmanager.com",
+      "https://googleads.g.doubleclick.net",
+      "https://www.googleadservices.com",
+    ]
+    : []),
+];
 const contentSecurityPolicy = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
+  `script-src ${scriptSources.join(" ")}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  `connect-src ${connectSources.join(" ")}`,
   "object-src 'none'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
