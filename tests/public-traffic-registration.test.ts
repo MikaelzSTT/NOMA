@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { NOMA_TRAFFIC_SESSION_COOKIE } from "@/lib/noma-traffic-constants";
+import { NOMA_TRAFFIC_ATTRIBUTION_COOKIE, NOMA_TRAFFIC_SESSION_COOKIE } from "@/lib/noma-traffic-constants";
 
 const mocks = vi.hoisted(() => ({
   db: {
@@ -77,6 +77,25 @@ describe("registro server-side da loja publica", () => {
     });
   });
 
+  it("cria atribuicao first-touch com UTM/gclid e nao sobrescreve na mesma sessao", () => {
+    vi.stubEnv("PUBLIC_MAINTENANCE_MODE", "false");
+
+    const first = proxy(nextRequest("https://noma.test/br?utm_source=google&utm_medium=cpc&utm_campaign=teste2&gclid=abc123", "same-session"));
+    const firstCookie = first?.headers.get("set-cookie") ?? "";
+
+    expect(firstCookie).toContain(`${NOMA_TRAFFIC_ATTRIBUTION_COOKIE}=`);
+    expect(decodeURIComponent(firstCookie)).toContain("utm_source=google");
+    expect(decodeURIComponent(firstCookie)).toContain("gclid=abc123");
+
+    const second = proxy(nextRequest(
+      "https://noma.test/br/produto/sofa?utm_source=facebook&utm_campaign=outra",
+      "same-session",
+      { cookie: `${NOMA_TRAFFIC_SESSION_COOKIE}=same-session; ${NOMA_TRAFFIC_ATTRIBUTION_COOKIE}=utm_source=google&utm_campaign=teste2&gclid=abc123` },
+    ));
+
+    expect(second?.headers.get("set-cookie")).toBeNull();
+  });
+
   it("duas sessoes tecnicas diferentes na mesma URL geram duas visitas distintas", async () => {
     vi.stubEnv("PUBLIC_MAINTENANCE_MODE", "false");
 
@@ -135,7 +154,7 @@ function nextRequest(url: string, sessionId?: string, extraHeaders?: Record<stri
     "x-vercel-ip-country": "BR",
     ...extraHeaders,
   });
-  if (sessionId) headers.set("cookie", `${NOMA_TRAFFIC_SESSION_COOKIE}=${sessionId}`);
+  if (sessionId && !extraHeaders?.cookie) headers.set("cookie", `${NOMA_TRAFFIC_SESSION_COOKIE}=${sessionId}`);
   return new NextRequest(new Request(url, { headers }));
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock3, Store } from "lucide-react";
+import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
@@ -10,6 +11,8 @@ import type { Market } from "@/lib/market";
 import styles from "./product-detail.module.css";
 
 interface ProductDetailPurchaseProps {
+  productId: string;
+  productSlug: string;
   images: Array<{ id: string; url: string; alt: string | null }>;
   name: string;
   brandLabel: string;
@@ -33,6 +36,8 @@ interface ProductDetailPurchaseProps {
 }
 
 export function ProductDetailPurchase({
+  productId,
+  productSlug,
   images,
   name,
   brandLabel,
@@ -49,9 +54,25 @@ export function ProductDetailPurchase({
 }: ProductDetailPurchaseProps) {
   const defaultVariant = useMemo(() => variants.find((variant) => variant.isDefault) ?? variants[0], [variants]);
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant);
+  const selectedVariantId = selectedVariant?.id ?? null;
+
+  useEffect(() => {
+    trackNomaPurchaseIntent({
+      eventType: "product_view",
+      market,
+      productId,
+      productSlug,
+      variantId: selectedVariantId,
+    });
+  }, [market, productId, productSlug, selectedVariantId]);
 
   return (
-    <section className={styles.productDetail}>
+    <section
+      className={styles.productDetail}
+      data-noma-product-id={productId}
+      data-noma-product-slug={productSlug}
+      data-noma-selected-variant-id={selectedVariantId ?? undefined}
+    >
       <ProductGallery key={selectedVariant?.imageUrl ?? "general-gallery"} images={images} name={name} sprite={sprite} featuredImageUrl={selectedVariant?.imageUrl} />
       <div className={styles.summary}>
         <p className={styles.brand}>{brandLabel}</p>
@@ -70,7 +91,23 @@ export function ProductDetailPurchase({
           <p><Store size={16} /><span>{market === "US" ? "Supplied by" : "Fornecido por"} <strong>{supplierName}</strong></span></p>
           {estimatedDelivery && <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {estimatedDelivery}</span></p>}
         </div>
-        <button disabled className={styles.buyButton}>{market === "US" ? "Available soon" : "Comprar em breve"}</button>
+        <button
+          disabled
+          className={styles.buyButton}
+          data-noma-event="buy_click"
+          data-noma-product-id={productId}
+          data-noma-product-slug={productSlug}
+          data-noma-selected-variant-id={selectedVariantId ?? undefined}
+          onClick={() => trackNomaPurchaseIntent({
+            eventType: "buy_click",
+            market,
+            productId,
+            productSlug,
+            variantId: selectedVariantId,
+          })}
+        >
+          {market === "US" ? "Available soon" : "Comprar em breve"}
+        </button>
       </div>
     </section>
   );

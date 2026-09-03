@@ -1,8 +1,15 @@
-import { CalendarDays, Clock3, MousePointerClick, Tags, TrendingUp } from "lucide-react";
+import { CalendarDays, Clock3, MousePointerClick, ShoppingCart, Tags, TrendingUp } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { formatDate } from "@/lib/utils";
-import { summarizeTrafficSources, summarizeUtmCampaigns, trafficSourceLabel } from "@/lib/noma-traffic";
+import { formatDate, formatMoney } from "@/lib/utils";
+import {
+  aggregateProductIntentEvents,
+  buildTrafficFunnel,
+  purchaseIntentSourceLabel,
+  summarizeTrafficSources,
+  summarizeUtmCampaigns,
+  trafficSourceLabel,
+} from "@/lib/noma-traffic";
 
 export default async function AdminTrafficPage() {
   await requireAdmin();
@@ -10,7 +17,7 @@ export default async function AdminTrafficPage() {
   const today = startOfLocalDay(now);
   const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [visitsToday, visitsLast7Days, gclidLast7Days, recentVisits, attributionVisits] = await Promise.all([
+  const [visitsToday, visitsLast7Days, gclidLast7Days, recentVisits, attributionVisits, recentIntentEvents, funnelIntentEvents] = await Promise.all([
     db.nomaTrafficVisit.count({ where: { visitedAt: { gte: today } } }),
     db.nomaTrafficVisit.count({ where: { visitedAt: { gte: last7Days } } }),
     db.nomaTrafficVisit.count({ where: { visitedAt: { gte: last7Days }, gclid: { not: null } } }),
@@ -35,10 +42,41 @@ export default async function AdminTrafficPage() {
       orderBy: { visitedAt: "desc" },
       select: { visitedAt: true, referrer: true, utmSource: true, utmCampaign: true },
     }),
+    db.nomaPurchaseIntentEvent.findMany({
+      orderBy: { occurredAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        occurredAt: true,
+        eventType: true,
+        market: true,
+        productTitle: true,
+        productSlug: true,
+        variantLabel: true,
+        displayedPrice: true,
+        currency: true,
+        referrer: true,
+        utmSource: true,
+        utmMedium: true,
+        utmCampaign: true,
+      },
+    }),
+    db.nomaPurchaseIntentEvent.findMany({
+      where: { occurredAt: { gte: last7Days } },
+      orderBy: { occurredAt: "desc" },
+      select: {
+        eventType: true,
+        market: true,
+        productOfferId: true,
+        productTitle: true,
+      },
+    }),
   ]);
 
   const sources = summarizeTrafficSources(attributionVisits);
   const campaigns = summarizeUtmCampaigns(attributionVisits);
+  const funnel = buildTrafficFunnel({ visits: visitsLast7Days, events: funnelIntentEvents });
+  const productIntentRows = aggregateProductIntentEvents(funnelIntentEvents).slice(0, 50);
   const cards = [
     { label: "Visitas hoje", value: visitsToday, icon: CalendarDays },
     { label: "Visitas últimos 7 dias", value: visitsLast7Days, icon: TrendingUp },
@@ -69,6 +107,100 @@ export default async function AdminTrafficPage() {
         <BreakdownPanel title="Origem das visitas" rows={sources} empty="Nenhuma origem registrada nos últimos 7 dias." />
         <BreakdownPanel title="Campanhas UTM" rows={campaigns} empty="Nenhuma campanha registrada nos últimos 7 dias." />
       </div>
+
+      <section className="admin-panel mt-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2>Funil</h2>
+            <p className="mt-1 text-sm text-muted">Eventos proprios de intencao de compra nos ultimos 7 dias.</p>
+          </div>
+          <ShoppingCart className="text-brand" size={20} />
+        </div>
+        <div className="admin-stat-grid">
+          <FunnelMetric label="Visitas" value={funnel.visits} />
+          <FunnelMetric label="Visualizacoes de produto" value={funnel.productViews} />
+          <FunnelMetric label="Cliques em comprar" value={funnel.buyClicks} />
+          <FunnelMetric label="Adicionar ao carrinho" value={funnel.addToCart} />
+          <FunnelMetric label="Inicio de checkout" value={funnel.checkoutStart} />
+          <FunnelMetric label="Compra assistida" value={funnel.assistedPurchaseClicks} />
+          <FunnelMetric label="Visita -> produto" value={formatPercent(funnel.visitToProductRate)} />
+          <FunnelMetric label="Produto -> comprar" value={formatPercent(funnel.productToBuyClickRate)} />
+          <FunnelMetric label="Comprar -> checkout" value={formatPercent(funnel.buyClickToCheckoutRate)} />
+        </div>
+      </section>
+
+      <section className="admin-panel mt-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2>Eventos recentes</h2>
+            <p className="mt-1 text-sm text-muted">Ultimos 50 eventos proprios de produto e intencao de compra.</p>
+          </div>
+          <Clock3 className="text-brand" size={20} />
+        </div>
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Horario</th>
+                <th>Evento</th>
+                <th>Mercado</th>
+                <th>Produto</th>
+                <th>Variante</th>
+                <th>Valor</th>
+                <th>Origem/campanha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentIntentEvents.map((event) => (
+                <tr key={event.id}>
+                  <td className="whitespace-nowrap">{formatDate(event.occurredAt)}</td>
+                  <td>{eventLabel(event.eventType)}</td>
+                  <td>{event.market}</td>
+                  <td className="max-w-56 truncate">{event.productTitle || event.productSlug}</td>
+                  <td>{event.variantLabel ?? "-"}</td>
+                  <td>{event.displayedPrice == null ? "-" : formatMoney(event.displayedPrice, event.currency ?? undefined)}</td>
+                  <td>{intentAttributionLabel(event)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {recentIntentEvents.length === 0 && <p className="p-8 text-center text-sm text-muted">Nenhum evento registrado.</p>}
+        </div>
+      </section>
+
+      <section className="admin-panel mt-6">
+        <div className="mb-4">
+          <h2>Intencao por produto</h2>
+          <p className="mt-1 text-sm text-muted">Agregacao por produto e mercado nos ultimos 7 dias.</p>
+        </div>
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Mercado</th>
+                <th>Visualizacoes</th>
+                <th>Cliques em comprar</th>
+                <th>Checkout start</th>
+                <th>Taxa de intencao</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productIntentRows.map((row) => (
+                <tr key={row.key}>
+                  <td className="max-w-72 truncate">{row.product}</td>
+                  <td>{row.market}</td>
+                  <td>{row.productViews.toLocaleString("pt-BR")}</td>
+                  <td>{row.buyClicks.toLocaleString("pt-BR")}</td>
+                  <td>{row.checkoutStart.toLocaleString("pt-BR")}</td>
+                  <td>{formatPercent(row.purchaseIntentRate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {productIntentRows.length === 0 && <p className="p-8 text-center text-sm text-muted">Nenhum produto com evento registrado.</p>}
+        </div>
+      </section>
 
       <section className="admin-panel mt-6">
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -112,6 +244,14 @@ export default async function AdminTrafficPage() {
   );
 }
 
+function FunnelMetric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="admin-stat">
+      <div><strong>{typeof value === "number" ? value.toLocaleString("pt-BR") : value}</strong><p>{label}</p></div>
+    </div>
+  );
+}
+
 function BreakdownPanel({ title, rows, empty }: { title: string; rows: Array<{ label: string; count: number }>; empty: string }) {
   return (
     <section className="admin-panel">
@@ -142,6 +282,32 @@ function MetricBar({ row, max }: { row: { label: string; count: number }; max: n
 function utmLabel(visit: { utmSource: string | null; utmMedium: string | null; utmCampaign: string | null }) {
   const values = [visit.utmSource, visit.utmMedium, visit.utmCampaign].filter(Boolean);
   return values.length > 0 ? values.join(" / ") : "-";
+}
+
+function intentAttributionLabel(event: {
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
+}) {
+  const source = purchaseIntentSourceLabel(event);
+  const campaign = [event.utmMedium, event.utmCampaign].filter(Boolean).join(" / ");
+  return campaign ? `${source} / ${campaign}` : source;
+}
+
+function eventLabel(eventType: string) {
+  const labels: Record<string, string> = {
+    product_view: "Product view",
+    buy_click: "Comprar",
+    add_to_cart: "Adicionar ao carrinho",
+    checkout_start: "Inicio de checkout",
+    assisted_purchase_click: "Compra assistida",
+  };
+  return labels[eventType] ?? eventType;
+}
+
+function formatPercent(value: number) {
+  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 }
 
 function startOfLocalDay(date: Date) {
