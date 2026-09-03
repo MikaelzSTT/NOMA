@@ -7,11 +7,11 @@ import { isMarket, type Market } from "@/lib/market";
 import { NOMA_TRAFFIC_SESSION_COOKIE } from "@/lib/noma-traffic-constants";
 
 export { NOMA_TRAFFIC_SESSION_COOKIE };
-const DEDUPE_WINDOW_MS = 5 * 60 * 1000;
+export const NOMA_TRAFFIC_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
 
 type TrackedQueryParam = "utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term" | "gclid";
 
-export type MaintenanceVisitInput = {
+export type TrafficVisitInput = {
   market: Market;
   pathname: string;
   referrer?: string | null;
@@ -21,7 +21,7 @@ export type MaintenanceVisitInput = {
   visitedAt?: Date;
 };
 
-export type NormalizedMaintenanceVisit = {
+export type NormalizedTrafficVisit = {
   visitedAt: Date;
   market: Market;
   pathname: string;
@@ -37,6 +37,9 @@ export type NormalizedMaintenanceVisit = {
   dedupeKey: string;
 };
 
+export type MaintenanceVisitInput = TrafficVisitInput;
+export type NormalizedMaintenanceVisit = NormalizedTrafficVisit;
+
 type TrafficVisitRow = {
   visitedAt: Date;
   referrer: string | null;
@@ -44,16 +47,18 @@ type TrafficVisitRow = {
   utmCampaign: string | null;
 };
 
-export function scheduleMaintenanceVisitTracking(input: MaintenanceVisitInput) {
-  const visit = normalizeMaintenanceVisit(input);
+export function scheduleTrafficVisitTracking(input: TrafficVisitInput) {
+  const visit = normalizeTrafficVisit(input);
   after(async () => {
-    await recordMaintenanceVisit(visit).catch((error: unknown) => {
-      console.error("[NOMA traffic] failed to record maintenance visit", error);
+    await recordTrafficVisit(visit).catch((error: unknown) => {
+      console.error("[NOMA traffic] failed to record visit", error);
     });
   });
 }
 
-export async function recordMaintenanceVisit(visit: NormalizedMaintenanceVisit) {
+export const scheduleMaintenanceVisitTracking = scheduleTrafficVisitTracking;
+
+export async function recordTrafficVisit(visit: NormalizedTrafficVisit) {
   try {
     await db.nomaTrafficVisit.create({ data: visit });
     return { recorded: true };
@@ -63,7 +68,9 @@ export async function recordMaintenanceVisit(visit: NormalizedMaintenanceVisit) 
   }
 }
 
-export function normalizeMaintenanceVisit(input: MaintenanceVisitInput): NormalizedMaintenanceVisit {
+export const recordMaintenanceVisit = recordTrafficVisit;
+
+export function normalizeTrafficVisit(input: TrafficVisitInput): NormalizedTrafficVisit {
   const visitedAt = input.visitedAt ?? new Date();
   const searchParams = normalizeSearchParams(input.searchParams);
   const market = isMarket(input.market) ? input.market : "BR";
@@ -103,6 +110,8 @@ export function normalizeMaintenanceVisit(input: MaintenanceVisitInput): Normali
   };
 }
 
+export const normalizeMaintenanceVisit = normalizeTrafficVisit;
+
 export function summarizeTrafficSources(visits: TrafficVisitRow[], limit = 8) {
   return topCounts(visits.map((visit) => trafficSourceLabel(visit)), limit);
 }
@@ -121,7 +130,7 @@ export function trafficSourceLabel(visit: Pick<TrafficVisitRow, "utmSource" | "r
   }
 }
 
-function normalizeSearchParams(input: MaintenanceVisitInput["searchParams"]) {
+function normalizeSearchParams(input: TrafficVisitInput["searchParams"]) {
   if (input instanceof URLSearchParams) return input;
   const params = new URLSearchParams();
   if (!input) return params;
@@ -171,8 +180,8 @@ function hashSession(value: string | null | undefined) {
   return cleaned ? sha256(cleaned) : null;
 }
 
-function buildDedupeKey(input: Omit<NormalizedMaintenanceVisit, "dedupeKey">) {
-  const bucket = Math.floor(input.visitedAt.getTime() / DEDUPE_WINDOW_MS);
+function buildDedupeKey(input: Omit<NormalizedTrafficVisit, "dedupeKey">) {
+  const bucket = Math.floor(input.visitedAt.getTime() / NOMA_TRAFFIC_DEDUPE_WINDOW_MS);
   const visitorKey = input.sessionHash ?? [
     input.userAgentSummary ?? "unknown-ua",
     input.referrer ?? "direct",

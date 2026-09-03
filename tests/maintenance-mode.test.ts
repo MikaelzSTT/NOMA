@@ -28,6 +28,9 @@ describe("modo temporario de trafego", () => {
 
     expect(response?.headers.get("x-middleware-next")).toBe("1");
     expect(response?.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response?.headers.get("set-cookie")).toContain(`${NOMA_TRAFFIC_SESSION_COOKIE}=`);
+    expect(forwardedHeaders(response!.headers).get("x-noma-original-pathname")).toBe("/br/produto/sofa");
+    expect(forwardedHeaders(response!.headers).get("x-noma-original-search")).toBe("?utm_source=google");
   });
 
   it("/admin e APIs nao sao interceptados", () => {
@@ -42,9 +45,10 @@ describe("modo temporario de trafego", () => {
 
   it("mantem redirect de / para o mercado quando maintenance esta desligado", () => {
     vi.stubEnv("PUBLIC_MAINTENANCE_MODE", "false");
-    const response = proxy(nextRequest("https://noma.test/?utm_source=google", "US"));
+    const response = proxy(nextRequest("https://noma.test/?utm_source=google&utm_medium=cpc&gclid=abc123", "US"));
 
-    expect(response?.headers.get("location")).toBe("https://noma.test/us?utm_source=google");
+    expect(response?.headers.get("location")).toBe("https://noma.test/us?utm_source=google&utm_medium=cpc&gclid=abc123");
+    expect(response?.headers.get("set-cookie")).toContain(`${NOMA_TRAFFIC_SESSION_COOKIE}=`);
   });
 
   it("helpers reconhecem flag, bypasses e mercado da landing", () => {
@@ -62,4 +66,13 @@ describe("modo temporario de trafego", () => {
 
 function nextRequest(url: string, country = "BR") {
   return new NextRequest(new Request(url, { headers: { "x-vercel-ip-country": country } }));
+}
+
+function forwardedHeaders(headers: Headers) {
+  const forwarded = new Headers();
+  for (const key of headers.get("x-middleware-override-headers")?.split(",") ?? []) {
+    const value = headers.get(`x-middleware-request-${key}`);
+    if (value) forwarded.set(key, value);
+  }
+  return forwarded;
 }

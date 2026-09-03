@@ -51,7 +51,7 @@ export default async function AdminTrafficPage() {
       <div className="admin-heading">
         <div>
           <p className="eyebrow">Trafego proprio</p>
-          <h1>Visitas da landing</h1>
+          <h1>Visitas da loja</h1>
           <p>Dados gravados pela NOMA a partir das requisicoes recebidas, independentes de GA4 e Google Ads.</p>
         </div>
       </div>
@@ -74,7 +74,7 @@ export default async function AdminTrafficPage() {
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h2>Visitas recentes</h2>
-            <p className="mt-1 text-sm text-muted">Ultimas 50 visitas deduplicadas da landing de maintenance.</p>
+            <p className="mt-1 text-sm text-muted">Ultimas 50 visitas deduplicadas da loja publica e da landing de maintenance.</p>
           </div>
           <Clock3 className="text-brand" size={20} />
         </div>
