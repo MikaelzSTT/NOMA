@@ -31,6 +31,8 @@ const environmentSchema = z.object({
   ADMIN_PASSWORD_HASH: z.preprocess((value) => value === "" ? undefined : value, z.string().optional()),
   SESSION_TTL_HOURS: optionalPositiveInt(8),
   CRON_SECRET: optionalSecret(24),
+  MERCADO_PAGO_ACCESS_TOKEN: optionalSecret(20),
+  MERCADO_PAGO_WEBHOOK_SECRET: optionalSecret(16),
   SYNC_PRICE_CRON: z.string().default("0 */6 * * *"),
   SYNC_AVAILABILITY_CRON: z.string().default("30 */6 * * *"),
   SYNC_CATALOG_CRON: z.string().default("0 3 * * *"),

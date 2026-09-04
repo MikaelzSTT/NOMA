@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Clock3, Store } from "lucide-react";
 import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
@@ -12,6 +13,7 @@ import styles from "./product-detail.module.css";
 
 interface ProductDetailPurchaseProps {
   productId: string;
+  offerId: string;
   productSlug: string;
   images: Array<{ id: string; url: string; alt: string | null }>;
   name: string;
@@ -37,6 +39,7 @@ interface ProductDetailPurchaseProps {
 
 export function ProductDetailPurchase({
   productId,
+  offerId,
   productSlug,
   images,
   name,
@@ -52,9 +55,17 @@ export function ProductDetailPurchase({
   fallback,
   market,
 }: ProductDetailPurchaseProps) {
+  const router = useRouter();
   const defaultVariant = useMemo(() => variants.find((variant) => variant.isDefault) ?? variants[0], [variants]);
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [assistedMessage, setAssistedMessage] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
   const selectedVariantId = selectedVariant?.id ?? null;
+  const selectedPrice = selectedVariant?.salePrice ?? fallback.sellingPrice ?? 0;
+  const requiresAssistedPurchase = market === "BR" && selectedPrice >= 10_000;
+  const canStartCheckout = market === "BR" && !requiresAssistedPurchase && (!variants.length || Boolean(selectedVariantId));
 
   useEffect(() => {
     trackNomaPurchaseIntent({
@@ -91,24 +102,105 @@ export function ProductDetailPurchase({
           <p><Store size={16} /><span>{market === "US" ? "Supplied by" : "Fornecido por"} <strong>{supplierName}</strong></span></p>
           {estimatedDelivery && <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {estimatedDelivery}</span></p>}
         </div>
-        <button
-          disabled
-          className={styles.buyButton}
-          data-noma-event="buy_click"
-          data-noma-product-id={productId}
-          data-noma-product-slug={productSlug}
-          data-noma-selected-variant-id={selectedVariantId ?? undefined}
-          onClick={() => trackNomaPurchaseIntent({
-            eventType: "buy_click",
-            market,
-            productId,
-            productSlug,
-            variantId: selectedVariantId,
-          })}
-        >
-          {market === "US" ? "Available soon" : "Comprar em breve"}
-        </button>
+        {market === "US" ? (
+          <button disabled className={styles.buyButton}>Available soon</button>
+        ) : requiresAssistedPurchase || assistedMessage ? (
+          <button className={styles.buyButton} type="button" onClick={handleAssistedPurchase}>
+            Solicitar atendimento de compra
+          </button>
+        ) : (
+          <button
+            disabled={isCheckoutLoading || !canStartCheckout}
+            className={styles.buyButton}
+            type="button"
+            data-noma-event="buy_click"
+            data-noma-product-id={productId}
+            data-noma-product-slug={productSlug}
+            data-noma-selected-variant-id={selectedVariantId ?? undefined}
+            onClick={handleBuyNow}
+          >
+            {isCheckoutLoading ? "Iniciando checkout..." : "Comprar agora"}
+          </button>
+        )}
+        {(checkoutError || assistedMessage) && (
+          <p className={styles.purchaseMessage}>{checkoutError ?? assistedMessage}</p>
+        )}
       </div>
     </section>
   );
+
+  async function handleBuyNow() {
+    if (!canStartCheckout || isCheckoutLoading) return;
+    setCheckoutError(null);
+    setAssistedMessage(null);
+    setIsCheckoutLoading(true);
+    trackNomaPurchaseIntent({
+      eventType: "buy_click",
+      market,
+      productId,
+      productSlug,
+      variantId: selectedVariantId,
+    });
+
+    idempotencyKeyRef.current = idempotencyKeyRef.current ?? createIdempotencyKey();
+    try {
+      const response = await fetch("/api/checkout/mercado-pago", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKeyRef.current,
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ productId, offerId, variantId: selectedVariantId, quantity: 1 }),
+      });
+      const payload = await response.json().catch(() => null) as CheckoutApiResponse | null;
+      if (payload?.type === "checkout" && payload.redirectUrl) {
+        trackNomaPurchaseIntent({
+          eventType: "checkout_start",
+          market,
+          productId,
+          productSlug,
+          variantId: selectedVariantId,
+        });
+        window.location.assign(payload.redirectUrl);
+        return;
+      }
+      if (payload?.type === "assisted_purchase") {
+        setAssistedMessage(payload.message);
+        trackNomaPurchaseIntent({
+          eventType: "assisted_purchase_click",
+          market,
+          productId,
+          productSlug,
+          variantId: selectedVariantId,
+        });
+        return;
+      }
+      setCheckoutError(payload?.type === "error" ? payload.message : "Nao foi possivel iniciar o checkout agora.");
+    } catch {
+      setCheckoutError("Nao foi possivel iniciar o checkout agora. Tente novamente.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
+  }
+
+  function handleAssistedPurchase() {
+    trackNomaPurchaseIntent({
+      eventType: "assisted_purchase_click",
+      market,
+      productId,
+      productSlug,
+      variantId: selectedVariantId,
+    });
+    router.push("/br#contato");
+  }
+}
+
+type CheckoutApiResponse =
+  | { type: "checkout"; redirectUrl: string; orderNumber: string }
+  | { type: "assisted_purchase"; message: string; reason: string }
+  | { type: "error"; message: string; error: string };
+
+function createIdempotencyKey() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

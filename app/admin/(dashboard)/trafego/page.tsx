@@ -302,6 +302,7 @@ function eventLabel(eventType: string) {
     add_to_cart: "Adicionar ao carrinho",
     checkout_start: "Inicio de checkout",
     assisted_purchase_click: "Compra assistida",
+    purchase_confirmed: "Compra confirmada",
   };
   return labels[eventType] ?? eventType;
 }

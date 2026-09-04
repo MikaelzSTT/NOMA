@@ -73,6 +73,29 @@ enum SyncStatus {
   FAILED
 }
 
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  REFUNDED
+  IN_PROCESS
+}
+
+enum PaymentProvider {
+  MERCADO_PAGO
+}
+
 /// A fonte comercial do produto. O nome fisico da tabela e mantido para que
 /// instalacoes da versao anterior possam migrar sem copiar dados.
 model Supplier {
@@ -185,6 +208,7 @@ model Product {
   variants             ProductVariant[]
   offers               ProductMarketOffer[]
   purchaseIntentEvents NomaPurchaseIntentEvent[]
+  orders               Order[]
   priceHistory         PriceHistory[]
   importItems          ImportItem[]
 
@@ -251,6 +275,7 @@ model ProductMarketOffer {
   supplier             Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   variants             ProductMarketOfferVariant[]
   purchaseIntentEvents NomaPurchaseIntentEvent[]
+  orders               Order[]
 
   @@unique([market, slug])
   @@unique([supplierId, market, supplierProductId])
@@ -285,6 +310,7 @@ model ProductMarketOfferVariant {
 
   offer                ProductMarketOffer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
   purchaseIntentEvents NomaPurchaseIntentEvent[]
+  orders               Order[]
 
   @@index([offerId, active])
   @@index([offerId, isDefault])
@@ -463,6 +489,60 @@ model SyncLock {
   @@index([acquiredUntil])
 }
 
+model Order {
+  id                       String          @id @default(cuid())
+  publicOrderNumber        String          @unique @db.VarChar(32)
+  market                   Market
+  currency                 String          @db.VarChar(3)
+  status                   OrderStatus     @default(PENDING_PAYMENT)
+  paymentStatus            PaymentStatus   @default(PENDING)
+  paymentProvider          PaymentProvider
+  productId                String
+  offerId                  String
+  variantId                String?
+  productNameSnapshot      String          @db.VarChar(255)
+  productSlugSnapshot      String          @db.VarChar(255)
+  variantNameSnapshot      String?         @db.VarChar(255)
+  unitPriceSnapshot        Decimal         @db.Decimal(12, 2)
+  quantity                 Int
+  subtotal                 Decimal         @db.Decimal(12, 2)
+  shippingAmount           Decimal         @default(0) @db.Decimal(12, 2)
+  total                    Decimal         @db.Decimal(12, 2)
+  buyerEmail               String?         @db.VarChar(255)
+  buyerName                String?         @db.VarChar(255)
+  buyerPhone               String?         @db.VarChar(40)
+  shippingAddress          Json?
+  mercadoPagoPreferenceId  String?         @unique @db.VarChar(120)
+  mercadoPagoPaymentId     String?         @unique @db.VarChar(120)
+  mercadoPagoCheckoutUrl   String?         @db.VarChar(1000)
+  externalReference        String          @unique @db.VarChar(80)
+  checkoutIdempotencyKey   String          @unique @db.VarChar(120)
+  sessionHash              String?         @db.VarChar(64)
+  utmSource                String?         @db.VarChar(255)
+  utmMedium                String?         @db.VarChar(255)
+  utmCampaign              String?         @db.VarChar(255)
+  utmContent               String?         @db.VarChar(255)
+  utmTerm                  String?         @db.VarChar(255)
+  gclid                    String?         @db.VarChar(255)
+  referrer                 String?         @db.VarChar(600)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  paidAt                   DateTime?
+  cancelledAt              DateTime?
+  refundedAt               DateTime?
+
+  product Product                    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  offer   ProductMarketOffer         @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  variant ProductMarketOfferVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  events  NomaPurchaseIntentEvent[]
+
+  @@index([market, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentStatus, createdAt])
+  @@index([productId, createdAt])
+  @@index([offerId, createdAt])
+}
+
 model NomaTrafficVisit {
   id               String   @id @default(cuid())
   visitedAt        DateTime @default(now())
@@ -510,10 +590,12 @@ model NomaPurchaseIntentEvent {
   userAgentSummary String?  @db.VarChar(255)
   sessionHash      String?  @db.VarChar(64)
   dedupeKey        String   @unique @db.VarChar(64)
+  orderId          String?
 
   product      Product                    @relation(fields: [productId], references: [id], onDelete: Cascade)
   productOffer ProductMarketOffer         @relation(fields: [productOfferId], references: [id], onDelete: Cascade)
   variant      ProductMarketOfferVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  order        Order?                     @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([occurredAt])
   @@index([market, occurredAt])
@@ -521,6 +603,7 @@ model NomaPurchaseIntentEvent {
   @@index([market, eventType, occurredAt])
   @@index([productId, eventType, occurredAt])
   @@index([productOfferId, eventType, occurredAt])
+  @@index([orderId])
   @@index([utmSource, occurredAt])
   @@index([utmCampaign, occurredAt])
   @@index([gclid, occurredAt])

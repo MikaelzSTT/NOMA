@@ -278,6 +278,10 @@ export function attributionCookieValue(input: Pick<NormalizedTrafficVisit, "utmS
   return params.size > 0 ? params.toString() : null;
 }
 
+export function purchaseAttributionFromCookie(value: string | null | undefined) {
+  return parseAttributionCookie(value);
+}
+
 export function purchaseIntentSourceLabel(event: Pick<NormalizedPurchaseIntentEvent, "utmSource" | "referrer">) {
   return trafficSourceLabel(event);
 }

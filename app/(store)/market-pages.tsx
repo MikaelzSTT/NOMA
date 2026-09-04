@@ -67,6 +67,7 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
         <Breadcrumbs market={market} items={[{ label: product.category.name, href: categoryPath(market, product.category.slug) }, { label: product.title }]} />
         <ProductDetailPurchase
           productId={product.productId}
+          offerId={product.id}
           productSlug={product.slug}
           images={product.images}
           name={product.title}
