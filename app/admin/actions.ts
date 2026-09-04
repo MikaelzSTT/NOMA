@@ -16,6 +16,7 @@ import { calculateNomaBrSalePrice } from "@/services/pricing";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
+import { SHIPPING_STRATEGIES } from "@/lib/shipping/types";
 
 export interface LoginState { error?: string }
 
@@ -358,6 +359,11 @@ const supplierSchema = z.object({
   baseUrl: z.preprocess((value) => value === "" ? undefined : value, z.url().optional()),
   settings: z.record(z.string(), z.unknown()),
   credentials: z.record(z.string(), z.string()),
+  shippingStrategy: z.enum(SHIPPING_STRATEGIES),
+  shippingActive: z.boolean(),
+  shippingCheckoutEnabled: z.boolean(),
+  shippingOriginPostalCode: z.string().trim().max(16).optional(),
+  shippingConfig: z.record(z.string(), z.unknown()),
   active: z.boolean(),
   authorized: z.boolean(),
   supportedMarkets: z.array(z.string().transform((value) => value.toUpperCase()).refine(isMarket)).min(1),
@@ -367,15 +373,21 @@ export async function saveSupplierAction(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "") || undefined;
   let rawSettings: unknown = {};
+  let rawShippingConfig: unknown = {};
   let credentials: unknown = {};
   try {
     rawSettings = JSON.parse(String(formData.get("settings") ?? "{}") || "{}");
+    rawShippingConfig = JSON.parse(String(formData.get("shippingConfig") ?? "{}") || "{}");
     credentials = JSON.parse(String(formData.get("credentials") ?? "{}") || "{}");
   } catch {
     redirect(`/admin/fornecedores?saved=invalid-json${id ? `&id=${id}` : ""}`);
   }
   const parsed = supplierSchema.safeParse({
     ...Object.fromEntries(formData), id, settings: rawSettings, credentials,
+    shippingConfig: rawShippingConfig,
+    shippingOriginPostalCode: String(formData.get("shippingOriginPostalCode") ?? "").replace(/\D/g, "") || undefined,
+    shippingActive: formData.get("shippingActive") === "true",
+    shippingCheckoutEnabled: formData.get("shippingCheckoutEnabled") === "true",
     active: formData.get("active") === "true",
     authorized: formData.get("authorized") === "true",
     supportedMarkets: formData.getAll("supportedMarkets"),
@@ -383,12 +395,13 @@ export async function saveSupplierAction(formData: FormData) {
   if (!parsed.success) redirect(`/admin/fornecedores?saved=error${id ? `&id=${id}` : ""}`);
   const { credentials: credentialValues, id: supplierId, settings: parsedSettings, ...data } = parsed.data;
   const supplierSettings = parsedSettings as Prisma.InputJsonValue;
+  const shippingConfig = data.shippingConfig as Prisma.InputJsonValue;
   const credentialsEncrypted = Object.keys(credentialValues).length ? encryptSupplierCredentials(credentialValues) : undefined;
   if (supplierId) {
-    await db.supplier.update({ where: { id: supplierId }, data: { ...data, supportedMarkets: data.supportedMarkets as Market[], settings: supplierSettings, ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
+    await db.supplier.update({ where: { id: supplierId }, data: { ...data, supportedMarkets: data.supportedMarkets as Market[], settings: supplierSettings, shippingConfig, ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
     await db.product.updateMany({ where: { supplierId }, data: { supplierName: data.name } });
   } else {
-    await db.supplier.create({ data: { ...data, supportedMarkets: data.supportedMarkets as Market[], settings: supplierSettings, slug: slugify(data.name), ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
+    await db.supplier.create({ data: { ...data, supportedMarkets: data.supportedMarkets as Market[], settings: supplierSettings, shippingConfig, slug: slugify(data.name), ...(credentialsEncrypted ? { credentialsEncrypted } : {}) } });
   }
   revalidatePath("/admin/fornecedores");
   revalidatePath("/admin/importar");

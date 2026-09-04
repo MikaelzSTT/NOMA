@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    shippingQuote: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
     nomaPurchaseIntentEvent: { create: vi.fn() },
   },
 }));
@@ -30,6 +34,8 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
     mocks.db.order.findUnique.mockResolvedValue(null);
     mocks.db.order.create.mockImplementation(async ({ data }) => ({ id: "order-1", ...data }));
     mocks.db.order.update.mockImplementation(async ({ data }) => ({ ...orderFixture(), ...data }));
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture());
+    mocks.db.shippingQuote.update.mockResolvedValue(shippingQuoteFixture());
     mocks.db.nomaPurchaseIntentEvent.create.mockResolvedValue({ id: "event-1" });
   });
 
@@ -44,10 +50,13 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
       offerId: "offer-1",
       variantId: "variant-1",
       quantity: 1,
+      quoteId: "quote-1",
+      destinationPostalCode: "01310-100",
+      shippingAddress: shippingAddressFixture(),
       idempotencyKey: "idem-valid-0001",
       attributionCookie: "utm_source=google&gclid=abc123",
       sessionId: "session-1",
-    }, { createPreference });
+    }, { createPreference, now: new Date("2026-09-03T12:00:00.000Z") });
 
     expect(result).toEqual({ type: "checkout", orderNumber: expect.stringMatching(/^BR/), redirectUrl: "https://mp.test/checkout" });
     expect(mocks.db.order.create).toHaveBeenCalledWith({ data: expect.objectContaining({
@@ -59,6 +68,14 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
       unitPriceSnapshot: 1234.56,
       subtotal: 1234.56,
       shippingAmount: 120,
+      shippingQuoteId: "quote-1",
+      shippingServiceCode: "fixed",
+      shippingServiceName: "Entrega",
+      shippingEstimatedMinDays: 8,
+      shippingEstimatedMaxDays: 12,
+      destinationPostalCode: "01310100",
+      buyerName: "Maria Silva",
+      shippingAddress: shippingAddressFixture({ postalCode: "01310100" }),
       total: 1354.56,
       paymentProvider: "MERCADO_PAGO",
       paymentStatus: "PENDING",
@@ -68,6 +85,7 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
     expect(createPreference).toHaveBeenCalledWith(expect.objectContaining({
       body: expect.objectContaining({
         items: [expect.objectContaining({ unit_price: 1234.56, currency_id: "BRL", quantity: 1 })],
+        shipments: { cost: 120, mode: "not_specified" },
         external_reference: expect.stringMatching(/^NOMA-BR/),
         notification_url: expect.stringContaining("/api/webhooks/mercado-pago"),
         back_urls: expect.objectContaining({
@@ -119,14 +137,19 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
       offerId: "offer-1",
       variantId: "variant-1",
       quantity: 1,
+      quoteId: "quote-1",
+      destinationPostalCode: "01310-100",
+      shippingAddress: shippingAddressFixture(),
       idempotencyKey: "idem-price-0001",
       amount: 1,
+      shippingPrice: 1,
     } as unknown as Parameters<typeof createMercadoPagoCheckout>[0];
 
-    await createMercadoPagoCheckout(tamperedInput, { createPreference });
+    await createMercadoPagoCheckout(tamperedInput, { createPreference, now: new Date("2026-09-03T12:00:00.000Z") });
 
     const preferenceInput = createPreference.mock.calls[0]?.[0];
     expect(preferenceInput?.body.items[0]?.unit_price).toBe(1234.56);
+    expect(preferenceInput?.body.shipments?.cost).toBe(120);
   });
 
   it(">= R$ 10.000 entra em compra assistida", async () => {
@@ -146,6 +169,58 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
     const result = await baseCheckout();
 
     expect(result).toMatchObject({ type: "assisted_purchase", reason: "shipping_required" });
+    expect(mocks.db.order.create).not.toHaveBeenCalled();
+  });
+
+  it("exige endereco completo antes do Mercado Pago", async () => {
+    const result = await baseCheckout({ shippingAddress: null, idempotencyKey: "idem-address-required-0001" });
+
+    expect(result).toMatchObject({ type: "error", code: "shipping_address_required" });
+    expect(mocks.db.order.create).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia quote expirada no checkout", async () => {
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({ expiresAt: new Date("2026-09-03T11:59:59.000Z") }));
+
+    const result = await baseCheckout({ idempotencyKey: "idem-expired-0001" }, { now: new Date("2026-09-03T12:00:00.000Z") });
+
+    expect(result).toMatchObject({ type: "error", code: "shipping_quote_expired" });
+    expect(mocks.db.order.create).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia quote de outro produto", async () => {
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({ offerId: "other-offer" }));
+
+    const result = await baseCheckout({ idempotencyKey: "idem-other-offer-0001" });
+
+    expect(result).toMatchObject({ type: "error", code: "shipping_quote_mismatch" });
+    expect(mocks.db.order.create).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia quote de outra variante", async () => {
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({ variantId: "other-variant" }));
+
+    const result = await baseCheckout({ idempotencyKey: "idem-other-variant-0001" });
+
+    expect(result).toMatchObject({ type: "error", code: "shipping_quote_variant_mismatch" });
+    expect(mocks.db.order.create).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia quote de quantidade diferente", async () => {
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({ quantity: 2 }));
+
+    const result = await baseCheckout({ idempotencyKey: "idem-other-quantity-0001" });
+
+    expect(result).toMatchObject({ type: "error", code: "shipping_quote_quantity_mismatch" });
+    expect(mocks.db.order.create).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia checkout quando recotacao muda o preco", async () => {
+    mocks.db.productMarketOffer.findFirst.mockResolvedValue(offerFixture({ shippingCost: 130 }));
+
+    const result = await baseCheckout({ idempotencyKey: "idem-shipping-changed-0001" });
+
+    expect(result).toMatchObject({ type: "error", code: "shipping_quote_changed" });
     expect(mocks.db.order.create).not.toHaveBeenCalled();
   });
 
@@ -244,18 +319,24 @@ async function expectCheckoutError(code: string, overrides: Partial<Parameters<t
   expect(mocks.db.order.create).not.toHaveBeenCalled();
 }
 
-function baseCheckout(overrides: Partial<Parameters<typeof createMercadoPagoCheckout>[0]> = {}) {
+function baseCheckout(
+  overrides: Partial<Parameters<typeof createMercadoPagoCheckout>[0]> = {},
+  context: Parameters<typeof createMercadoPagoCheckout>[1] = {},
+) {
   return createMercadoPagoCheckout({
     productId: "product-1",
     offerId: "offer-1",
     variantId: "variant-1",
     quantity: 1,
+    quoteId: "quote-1",
+    destinationPostalCode: "01310-100",
+    shippingAddress: shippingAddressFixture(),
     idempotencyKey: "idem-base-0001",
     ...overrides,
-  }, { createPreference: async () => ({ id: "pref-1", init_point: "https://mp.test/checkout", sandbox_init_point: undefined }) });
+  }, { now: new Date("2026-09-03T12:00:00.000Z"), createPreference: async () => ({ id: "pref-1", init_point: "https://mp.test/checkout", sandbox_init_point: undefined }), ...context });
 }
 
-function offerFixture(overrides: Record<string, unknown> & { product?: Record<string, unknown>; shippingCost?: number | null; variants?: Array<Record<string, unknown>> } = {}) {
+function offerFixture(overrides: Record<string, unknown> & { product?: Record<string, unknown>; supplier?: Record<string, unknown>; shippingCost?: number | null; variants?: Array<Record<string, unknown>> } = {}) {
   return {
     ...baseOffer(),
     ...overrides,
@@ -288,8 +369,8 @@ function baseOffer() {
     availability: "AVAILABLE",
     shippingCost: 120,
     estimatedDelivery: null,
-    estimatedDeliveryMinDays: null,
-    estimatedDeliveryMaxDays: null,
+    estimatedDeliveryMinDays: 8,
+    estimatedDeliveryMaxDays: 12,
     sourceUrl: null,
     active: true,
     featured: false,
@@ -309,7 +390,34 @@ function baseOffer() {
     createdAt: new Date("2026-09-03T12:00:00.000Z"),
     updatedAt: new Date("2026-09-03T12:00:00.000Z"),
     product: productFixture(),
+    supplier: supplierFixture(),
     variants: [variantFixture()],
+  };
+}
+
+function supplierFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "supplier-1",
+    name: "Fornecedor",
+    slug: "fornecedor",
+    adapterKey: "mock-catalog",
+    baseUrl: null,
+    active: true,
+    authorized: true,
+    settings: {},
+    credentialsEncrypted: null,
+    shippingStrategy: "FIXED",
+    shippingActive: true,
+    shippingCheckoutEnabled: true,
+    shippingOriginPostalCode: "04309011",
+    shippingConfig: {},
+    capabilities: [],
+    supportedMarkets: ["BR"],
+    syncCursor: null,
+    lastSyncedAt: null,
+    createdAt: new Date("2026-09-03T12:00:00.000Z"),
+    updatedAt: new Date("2026-09-03T12:00:00.000Z"),
+    ...overrides,
   };
 }
 
@@ -410,6 +518,12 @@ function baseOrder() {
     quantity: 1,
     subtotal: 1234.56,
     shippingAmount: 120,
+    shippingQuoteId: "quote-1",
+    shippingServiceCode: "fixed",
+    shippingServiceName: "Entrega",
+    shippingEstimatedMinDays: 8,
+    shippingEstimatedMaxDays: 12,
+    destinationPostalCode: "01310100",
     total: 1354.56,
     buyerEmail: null,
     buyerName: null,
@@ -433,6 +547,46 @@ function baseOrder() {
     paidAt: null,
     cancelledAt: null,
     refundedAt: null,
+  };
+}
+
+function shippingQuoteFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "quote-1",
+    market: "BR",
+    supplierId: "supplier-1",
+    offerId: "offer-1",
+    variantId: "variant-1",
+    destinationPostalCode: "01310100",
+    quantity: 1,
+    serviceCode: "fixed",
+    serviceName: "Entrega",
+    price: 120,
+    currency: "BRL",
+    estimatedMinDays: 8,
+    estimatedMaxDays: 12,
+    strategy: "FIXED",
+    adapterKey: "mock-catalog",
+    rawResponse: {},
+    expiresAt: new Date("2026-09-03T12:30:00.000Z"),
+    createdAt: new Date("2026-09-03T12:00:00.000Z"),
+    updatedAt: new Date("2026-09-03T12:00:00.000Z"),
+    revalidatedAt: null,
+    ...overrides,
+  };
+}
+
+function shippingAddressFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    recipientName: "Maria Silva",
+    postalCode: "01310-100",
+    street: "Avenida Paulista",
+    number: "1000",
+    complement: "Apto 101",
+    neighborhood: "Bela Vista",
+    city: "Sao Paulo",
+    state: "SP",
+    ...overrides,
   };
 }
 

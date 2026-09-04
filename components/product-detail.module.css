@@ -310,6 +310,150 @@
   font-weight: 680;
 }
 
+.shippingBox {
+  display: grid;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--noma-line);
+  gap: 0.75rem;
+}
+
+.shippingBox > label {
+  color: var(--noma-ink);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.shippingFormRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+}
+
+.shippingFormRow input {
+  min-width: 0;
+  height: 2.9rem;
+  border: 1px solid var(--noma-line);
+  background: rgba(255, 253, 250, 0.72);
+  padding-inline: 0.85rem;
+  color: var(--noma-ink);
+  font-size: 0.86rem;
+}
+
+.shippingFormRow button {
+  min-width: 7rem;
+  height: 2.9rem;
+  background: var(--noma-ink);
+  color: var(--noma-paper-light);
+  padding-inline: 1rem;
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shippingFormRow button:disabled {
+  opacity: 0.48;
+}
+
+.shippingOptions {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.shippingOption {
+  display: grid;
+  min-height: 4rem;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid var(--noma-line);
+  background: rgba(255, 253, 250, 0.58);
+  padding: 0.75rem;
+  color: var(--noma-muted);
+  font-size: 0.75rem;
+}
+
+.shippingOption[data-selected="true"] {
+  border-color: var(--noma-ink);
+  background: rgba(255, 253, 250, 0.9);
+  color: var(--noma-ink);
+}
+
+.shippingOption input {
+  accent-color: var(--noma-ink);
+}
+
+.shippingOption strong,
+.shippingOption b {
+  display: block;
+  color: var(--noma-ink);
+  font-size: 0.78rem;
+}
+
+.shippingOption small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--noma-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.shippingMessage {
+  color: var(--noma-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.addressBox {
+  display: grid;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--noma-line);
+  gap: 0.75rem;
+}
+
+.addressBox > p {
+  color: var(--noma-ink);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.addressGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.addressGrid label {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+  color: var(--noma-muted);
+  font-size: 0.66rem;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.addressGrid input {
+  min-width: 0;
+  height: 2.65rem;
+  border: 1px solid var(--noma-line);
+  background: rgba(255, 253, 250, 0.72);
+  padding-inline: 0.75rem;
+  color: var(--noma-ink);
+  font-size: 0.8rem;
+  text-transform: none;
+}
+
+.addressGrid input:disabled {
+  color: var(--noma-muted);
+}
+
 .buyButton {
   display: flex;
   width: 100%;
@@ -451,6 +595,8 @@
   .title { font-size: clamp(2.25rem, 11vw, 3.2rem); }
   .description { margin-top: 1.35rem; }
   .variantChip { min-height: 2.8rem; }
+  .shippingFormRow,
+  .addressGrid { grid-template-columns: 1fr; }
   .contentBand { padding-block: 4.5rem; }
   .relatedGrid { grid-template-columns: 1fr; }
   .relatedHeading { align-items: start; flex-direction: column; }

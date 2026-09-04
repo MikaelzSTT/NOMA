@@ -10,6 +10,18 @@ const checkoutSchema = z.object({
   offerId: z.string().min(1).max(120),
   variantId: z.string().min(1).max(120).nullable().optional(),
   quantity: z.coerce.number().int().positive().max(5).default(1),
+  quoteId: z.string().min(1).max(120).nullable().optional(),
+  destinationPostalCode: z.string().min(8).max(16).nullable().optional(),
+  shippingAddress: z.object({
+    recipientName: z.string().min(1).max(255),
+    postalCode: z.string().min(8).max(16),
+    street: z.string().min(1).max(255),
+    number: z.string().min(1).max(40),
+    complement: z.string().max(120).nullable().optional(),
+    neighborhood: z.string().min(1).max(120),
+    city: z.string().min(1).max(120),
+    state: z.string().min(2).max(2),
+  }).nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {

@@ -5,6 +5,8 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { createMercadoPagoPreference, getMercadoPagoPayment, type MercadoPagoPayment } from "@/lib/mercado-pago";
 import { NOMA_TRAFFIC_ATTRIBUTION_COOKIE, NOMA_TRAFFIC_SESSION_COOKIE, purchaseAttributionFromCookie } from "@/lib/noma-traffic";
+import { normalizeBrazilianPostalCode, revalidateShippingQuote, shippingOfferInclude } from "@/lib/shipping/engine";
+import { ShippingQuoteError, type NormalizedShippingQuote, type ShippingAdapter, type ShippingStrategyCode } from "@/lib/shipping/types";
 import { absoluteUrl } from "@/lib/utils";
 
 const ASSISTED_PURCHASE_THRESHOLD = 10_000;
@@ -15,6 +17,9 @@ type CheckoutInput = {
   offerId: string;
   variantId?: string | null;
   quantity: number;
+  quoteId?: string | null;
+  destinationPostalCode?: string | null;
+  shippingAddress?: ShippingAddressInput | null;
   idempotencyKey: string;
   attributionCookie?: string | null;
   sessionId?: string | null;
@@ -23,11 +28,34 @@ type CheckoutInput = {
 type CheckoutContext = {
   createPreference?: typeof createMercadoPagoPreference;
   now?: Date;
+  shippingAdapters?: Partial<Record<ShippingStrategyCode, ShippingAdapter>>;
 };
 
 type WebhookContext = {
   getPayment?: typeof getMercadoPagoPayment;
   now?: Date;
+};
+
+type ShippingAddressInput = {
+  recipientName?: string | null;
+  postalCode?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+};
+
+type NormalizedShippingAddress = {
+  recipientName: string;
+  postalCode: string;
+  street: string;
+  number: string;
+  complement: string | null;
+  neighborhood: string;
+  city: string;
+  state: string;
 };
 
 export type CheckoutResult =
@@ -36,10 +64,7 @@ export type CheckoutResult =
   | { type: "error"; code: string; status: number; message: string };
 
 type OfferForCheckout = Prisma.ProductMarketOfferGetPayload<{
-  include: {
-    product: true;
-    variants: true;
-  };
+  include: typeof shippingOfferInclude;
 }>;
 
 export async function createMercadoPagoCheckout(input: CheckoutInput, context: CheckoutContext = {}): Promise<CheckoutResult> {
@@ -50,29 +75,60 @@ export async function createMercadoPagoCheckout(input: CheckoutInput, context: C
 
   const offer = await db.productMarketOffer.findFirst({
     where: { id: sanitizeText(input.offerId, 120) ?? "", productId: sanitizeText(input.productId, 120) ?? "" },
-    include: { product: true, variants: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] } },
+    include: shippingOfferInclude,
   });
   const validation = validateOfferForCheckout(offer, input.variantId);
   if (validation.type !== "valid") return validation.result;
 
   const { variant, unitPrice, stock } = validation;
   const subtotal = roundMoney(unitPrice * quantity);
-  const shippingAmount = offer!.shippingCost == null ? null : roundMoney(Number(offer!.shippingCost));
   if (subtotal >= ASSISTED_PURCHASE_THRESHOLD) {
-    return assisted("high_value", "Esta compra precisa de atendimento personalizado.");
-  }
-  if (shippingAmount == null) {
-    return assisted("shipping_required", "Esta compra precisa de atendimento para confirmar o frete.");
-  }
-  const total = roundMoney(subtotal + shippingAmount);
-  if (total >= ASSISTED_PURCHASE_THRESHOLD) {
     return assisted("high_value", "Esta compra precisa de atendimento personalizado.");
   }
   if (stock != null && quantity > stock) return publicError("insufficient_stock", 409, "Estoque indisponivel para a quantidade solicitada.");
 
+  let shippingAddress: NormalizedShippingAddress | null;
+  let destinationPostalCode: string;
+  try {
+    shippingAddress = normalizeShippingAddress(input.shippingAddress);
+    if (!shippingAddress) return publicError("shipping_address_required", 400, "Informe o endereco de entrega antes de comprar.");
+    destinationPostalCode = normalizeBrazilianPostalCode(input.destinationPostalCode ?? shippingAddress.postalCode);
+    if (destinationPostalCode !== shippingAddress.postalCode) {
+      return publicError("shipping_postal_code_mismatch", 400, "O CEP do endereco precisa ser o mesmo usado na cotacao.");
+    }
+  } catch (error) {
+    if (error instanceof ShippingQuoteError) return publicError(error.code, error.status, error.message);
+    throw error;
+  }
+
+  let shippingQuote: NormalizedShippingQuote;
+  try {
+    shippingQuote = await revalidateShippingQuote({
+      quoteId: input.quoteId ?? "",
+      offer: offer!,
+      variant,
+      destinationPostalCode,
+      quantity,
+    }, { now: context.now, adapters: context.shippingAdapters });
+  } catch (error) {
+    if (error instanceof ShippingQuoteError) {
+      if (["shipping_quote_required", "shipping_quote_unavailable", "shipping_adapter_unavailable"].includes(error.code)) {
+        return assisted("shipping_required", "Esta compra precisa de atendimento para confirmar o frete.");
+      }
+      return publicError(error.code, error.status, error.message);
+    }
+    throw error;
+  }
+
+  const shippingAmount = roundMoney(shippingQuote.price);
+  const total = roundMoney(subtotal + shippingAmount);
+  if (total >= ASSISTED_PURCHASE_THRESHOLD) {
+    return assisted("high_value", "Esta compra precisa de atendimento personalizado.");
+  }
+
   const existing = await db.order.findUnique({ where: { checkoutIdempotencyKey: idempotencyKey } });
   if (existing) {
-    if (!matchesExistingOrder(existing, { offer: offer!, variantId: variant?.id ?? null, quantity, total })) {
+    if (!matchesExistingOrder(existing, { offer: offer!, variantId: variant?.id ?? null, quantity, total, shippingQuoteId: shippingQuote.quoteId })) {
       return publicError("idempotency_conflict", 409, "Esta tentativa de compra ja foi usada em outra selecao.");
     }
     if (existing.mercadoPagoCheckoutUrl) {
@@ -87,6 +143,8 @@ export async function createMercadoPagoCheckout(input: CheckoutInput, context: C
     quantity,
     subtotal,
     shippingAmount,
+    shippingQuote,
+    shippingAddress,
     total,
     idempotencyKey,
     attributionCookie: input.attributionCookie,
@@ -95,7 +153,7 @@ export async function createMercadoPagoCheckout(input: CheckoutInput, context: C
 
   const preference = await (context.createPreference ?? createMercadoPagoPreference)({
     idempotencyKey,
-    body: buildPreferenceBody(order, offer!, variant, unitPrice, quantity, shippingAmount),
+    body: buildPreferenceBody(order, offer!, variant, unitPrice, quantity, shippingAmount, shippingQuote),
   });
 
   const updated = await db.order.update({
@@ -206,6 +264,8 @@ async function createPendingOrder(input: {
   quantity: number;
   subtotal: number;
   shippingAmount: number;
+  shippingQuote: NormalizedShippingQuote;
+  shippingAddress: NormalizedShippingAddress;
   total: number;
   idempotencyKey: string;
   attributionCookie?: string | null;
@@ -232,7 +292,15 @@ async function createPendingOrder(input: {
       quantity: input.quantity,
       subtotal: input.subtotal,
       shippingAmount: input.shippingAmount,
+      shippingQuoteId: input.shippingQuote.quoteId,
+      shippingServiceCode: input.shippingQuote.serviceCode,
+      shippingServiceName: input.shippingQuote.serviceName,
+      shippingEstimatedMinDays: input.shippingQuote.estimatedMinDays,
+      shippingEstimatedMaxDays: input.shippingQuote.estimatedMaxDays,
+      destinationPostalCode: input.shippingQuote.destinationPostalCode,
       total: input.total,
+      buyerName: input.shippingAddress.recipientName,
+      shippingAddress: input.shippingAddress as Prisma.InputJsonValue,
       externalReference: `NOMA-${publicOrderNumber}`,
       checkoutIdempotencyKey: input.idempotencyKey,
       sessionHash,
@@ -254,6 +322,7 @@ function buildPreferenceBody(
   unitPrice: number,
   quantity: number,
   shippingAmount: number,
+  shippingQuote: NormalizedShippingQuote,
 ) {
   const orderPath = `/br/pedido/${order.publicOrderNumber}`;
   return {
@@ -279,6 +348,8 @@ function buildPreferenceBody(
       product_id: offer.productId,
       offer_id: offer.id,
       variant_id: variant?.id ?? null,
+      shipping_quote_id: shippingQuote.quoteId,
+      shipping_service_code: shippingQuote.serviceCode,
       market: "BR",
     },
   };
@@ -289,10 +360,12 @@ function matchesExistingOrder(order: {
   variantId: string | null;
   quantity: number;
   total: unknown;
-}, input: { offer: OfferForCheckout; variantId: string | null; quantity: number; total: number }) {
+  shippingQuoteId?: string | null;
+}, input: { offer: OfferForCheckout; variantId: string | null; quantity: number; total: number; shippingQuoteId: string }) {
   return order.offerId === input.offer.id
     && (order.variantId ?? null) === input.variantId
     && order.quantity === input.quantity
+    && (order.shippingQuoteId ?? null) === input.shippingQuoteId
     && roundMoney(Number(order.total)) === input.total;
 }
 
@@ -387,6 +460,20 @@ function generatePublicOrderNumber() {
 function hashSession(value: string | null | undefined) {
   const cleaned = sanitizeText(value ?? "", 120);
   return cleaned ? createHash("sha256").update(cleaned).digest("hex") : null;
+}
+
+function normalizeShippingAddress(value: ShippingAddressInput | null | undefined): NormalizedShippingAddress | null {
+  if (!value || typeof value !== "object") return null;
+  const recipientName = sanitizeText(value.recipientName, 255);
+  const postalCode = normalizeBrazilianPostalCode(value.postalCode ?? "");
+  const street = sanitizeText(value.street, 255);
+  const number = sanitizeText(value.number, 40);
+  const complement = sanitizeText(value.complement, 120);
+  const neighborhood = sanitizeText(value.neighborhood, 120);
+  const city = sanitizeText(value.city, 120);
+  const state = sanitizeText(value.state, 2)?.toUpperCase() ?? null;
+  if (!recipientName || !street || !number || !neighborhood || !city || !state || !/^[A-Z]{2}$/.test(state)) return null;
+  return { recipientName, postalCode, street, number, complement, neighborhood, city, state };
 }
 
 function sanitizeText(value: string | null | undefined, maxLength: number) {

@@ -18,6 +18,9 @@ export const NOMA_PURCHASE_INTENT_EVENT_TYPES = [
   "add_to_cart",
   "checkout_start",
   "assisted_purchase_click",
+  "shipping_quote_requested",
+  "shipping_quote_succeeded",
+  "shipping_quote_failed",
 ] as const;
 export type NomaPurchaseIntentEventType = typeof NOMA_PURCHASE_INTENT_EVENT_TYPES[number];
 

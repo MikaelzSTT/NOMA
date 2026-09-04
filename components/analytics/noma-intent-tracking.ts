@@ -5,7 +5,10 @@ type NomaPurchaseIntentEventType =
   | "buy_click"
   | "add_to_cart"
   | "checkout_start"
-  | "assisted_purchase_click";
+  | "assisted_purchase_click"
+  | "shipping_quote_requested"
+  | "shipping_quote_succeeded"
+  | "shipping_quote_failed";
 
 type NomaIntentPayload = {
   eventType: NomaPurchaseIntentEventType;
@@ -21,6 +24,9 @@ const CLIENT_DEDUPE_MS: Record<NomaPurchaseIntentEventType, number> = {
   add_to_cart: 1_500,
   checkout_start: 1_500,
   assisted_purchase_click: 1_500,
+  shipping_quote_requested: 1_500,
+  shipping_quote_succeeded: 1_500,
+  shipping_quote_failed: 1_500,
 };
 
 const recentEvents = new Map<string, number>();
