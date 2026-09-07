@@ -74,7 +74,7 @@ export function ProductDetailPurchase({
   const selectedShippingQuote = shippingQuotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null;
   const requiresShippingQuote = market === "BR" && !requiresAssistedPurchase;
   const canStartCheckout = market === "BR" && !requiresAssistedPurchase && (!variants.length || Boolean(selectedVariantId)) && Boolean(selectedShippingQuote) && isShippingAddressComplete(shippingAddress);
-  const displayedDeliveryEstimate = selectedShippingQuote ? deliveryEstimate(selectedShippingQuote) : estimatedDelivery;
+  const displayedDeliveryEstimate = shippingQuoteDeliveryEstimate(selectedShippingQuote) ?? estimatedDelivery;
 
   useEffect(() => {
     trackNomaPurchaseIntent({
@@ -144,7 +144,7 @@ export function ProductDetailPurchase({
                     <Truck size={17} aria-hidden="true" />
                     <span>
                       <strong>{quote.serviceName}</strong>
-                      <small>{deliveryEstimate(quote)}</small>
+                      <small>{shippingOptionDeliveryEstimate(quote)}</small>
                     </span>
                     <b>{formatMoney(quote.price, quote.currency)}</b>
                   </label>
@@ -374,14 +374,19 @@ function formatMoney(value: number, currency: string) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(value);
 }
 
-function deliveryEstimate(quote: ShippingQuoteOption) {
+function shippingQuoteDeliveryEstimate(quote: ShippingQuoteOption | null) {
+  if (!quote) return null;
   if (quote.estimatedMinDays != null && quote.estimatedMaxDays != null) {
     return quote.estimatedMinDays === quote.estimatedMaxDays
       ? `${quote.estimatedMaxDays} dias uteis`
       : `${quote.estimatedMinDays} a ${quote.estimatedMaxDays} dias uteis`;
   }
   if (quote.estimatedMaxDays != null) return `Ate ${quote.estimatedMaxDays} dias uteis`;
-  return "Prazo a confirmar";
+  return null;
+}
+
+function shippingOptionDeliveryEstimate(quote: ShippingQuoteOption) {
+  return shippingQuoteDeliveryEstimate(quote) ?? "Prazo a confirmar";
 }
 
 function isShippingAddressComplete(address: ShippingAddressState) {

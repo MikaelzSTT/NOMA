@@ -2,7 +2,6 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { Market } from "@/lib/market";
-import { isDynamicShippingStrategy } from "@/lib/shipping/types";
 import type { ProductFilters } from "@/lib/validation/product";
 
 const offerSelect = {
@@ -23,6 +22,8 @@ const offerSelect = {
   availability: true,
   shippingCost: true,
   estimatedDelivery: true,
+  estimatedDeliveryMinDays: true,
+  estimatedDeliveryMaxDays: true,
   active: true,
   featured: true,
   popularityScore: true,
@@ -337,7 +338,7 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     stock: defaultOfferVariant?.stock ?? offer.stockQuantity,
     availability: defaultOfferVariant?.availability ?? offer.availability,
     shippingCost: offer.shippingCost == null ? null : Number(offer.shippingCost),
-    estimatedDelivery: isDynamicShippingStrategy(offer.supplier.shippingStrategy) ? null : offer.estimatedDelivery,
+    estimatedDelivery: deliveryLabel(offer.market as Market, offer.estimatedDeliveryMinDays, offer.estimatedDeliveryMaxDays),
     attributes: publicAttributes(product.attributes),
     featured: offer.featured,
     rating: product.rating == null ? null : Number(product.rating),
@@ -384,6 +385,12 @@ function publicAttributes(value: unknown) {
     !/(cost|custo|wholesale|atacado|supplier.*price)/i.test(key)
     && ["string", "number", "boolean"].includes(typeof item),
   )) as Record<string, string | number | boolean>;
+}
+
+function deliveryLabel(market: Market, minDays: number | null, maxDays: number | null) {
+  if (minDays == null || maxDays == null) return null;
+  if (minDays === maxDays) return market === "US" ? `${maxDays} business days` : `${maxDays} dias úteis`;
+  return market === "US" ? `${minDays}-${maxDays} business days` : `${minDays} a ${maxDays} dias úteis`;
 }
 
 function calculatePublicDiscount(sellingPrice: number | null, compareAtPrice: number | null) {

@@ -59,8 +59,20 @@ describe("mercados públicos", () => {
     expect(product?.variants[0]).not.toHaveProperty("costPrice");
   });
 
-  it("oculta prazo cadastrado quando fornecedor usa cotacao dinamica", async () => {
+  it("usa prazo cadastrado como fallback mesmo quando fornecedor usa cotacao dinamica", async () => {
     mocks.brOffer.supplier.shippingStrategy = "SUPPLIER_API";
+
+    const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(product?.estimatedDelivery).toBe("5 a 7 dias úteis");
+  });
+
+  it("não expõe prazo legado quando min/max não estão cadastrados", async () => {
+    Object.assign(mocks.brOffer, {
+      estimatedDelivery: "Entrega em 5 a 7 dias úteis",
+      estimatedDeliveryMinDays: null,
+      estimatedDeliveryMaxDays: null,
+    });
 
     const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
 
@@ -117,6 +129,8 @@ function offerRow(market: "BR" | "US", slug: string, currency: "BRL" | "USD", se
     availability: "AVAILABLE",
     shippingCost: null,
     estimatedDelivery: market === "US" ? "Ships in 5-7 business days" : "Entrega em 5 a 7 dias úteis",
+    estimatedDeliveryMinDays: 5,
+    estimatedDeliveryMaxDays: 7,
     active: true,
     featured: true,
     popularityScore: 10,

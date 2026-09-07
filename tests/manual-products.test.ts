@@ -114,12 +114,31 @@ describe("createManualProduct", () => {
     }));
   });
 
-  it("exige prazo fixo para fornecedor sem frete dinamico", async () => {
-    await expect(createManualProduct({
+  it("permite prazo ausente para fornecedor manual e persiste null", async () => {
+    await createManualProduct({
       ...baseInput,
       estimatedDeliveryMinDays: undefined,
       estimatedDeliveryMaxDays: undefined,
-    })).rejects.toEqual(new ManualProductError("delivery-window-required"));
+    });
+
+    expect(mocks.transaction.product.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ estimatedDelivery: null }),
+    }));
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        estimatedDelivery: null,
+        estimatedDeliveryMinDays: null,
+        estimatedDeliveryMaxDays: null,
+      }),
+    }));
+  });
+
+  it("rejeita prazo preenchido com máximo menor que mínimo", async () => {
+    await expect(createManualProduct({
+      ...baseInput,
+      estimatedDeliveryMinDays: 15,
+      estimatedDeliveryMaxDays: 7,
+    })).rejects.toEqual(new ManualProductError("delivery-window-invalid"));
   });
 
   it("usa fornecedor existente compatível e grava oferta US em USD", async () => {

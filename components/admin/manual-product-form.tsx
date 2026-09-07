@@ -8,7 +8,7 @@ import { MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-consta
 import { previewToOfferVariants } from "@/lib/admin/url-preview-to-variants";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 import type { ProductUrlImportPreview } from "@/lib/product-import/types";
-import { isDynamicShippingStrategy, type ShippingStrategyCode } from "@/lib/shipping/types";
+import type { ShippingStrategyCode } from "@/lib/shipping/types";
 import { slugify } from "@/lib/utils";
 
 interface SupplierOption {
@@ -57,9 +57,6 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
     [market, suppliers],
   );
   const manualSupplierId = `${MANUAL_SUPPLIER_OPTION_PREFIX}${market}`;
-  const selectedSupplier = supplierOptions.find((supplier) => supplier.id === selectedSupplierId);
-  const selectedShippingStrategy = selectedSupplier?.shippingStrategy ?? "MANUAL";
-  const hasDynamicDelivery = isDynamicShippingStrategy(selectedShippingStrategy);
   const imagesText = images.join("\n");
 
   function updateTitle(value: string) {
@@ -191,10 +188,9 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
       <section className="admin-panel space-y-4">
         <h2>Entrega</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="admin-field">Prazo mínimo de entrega<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" required={!hasDynamicDelivery} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label>
-          <label className="admin-field">Prazo máximo de entrega<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" required={!hasDynamicDelivery} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label>
+          <label className="admin-field">Prazo mínimo de entrega<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" /></label>
+          <label className="admin-field">Prazo máximo de entrega<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" /></label>
         </div>
-        {hasDynamicDelivery && <p className="text-sm text-muted">Prazo e frete serão exibidos após cotação do Shipping Engine.</p>}
       </section>
 
       <section className="admin-panel space-y-4">

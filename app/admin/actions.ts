@@ -16,7 +16,7 @@ import { calculateNomaBrSalePrice } from "@/services/pricing";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
-import { SHIPPING_STRATEGIES, isDynamicShippingStrategy } from "@/lib/shipping/types";
+import { SHIPPING_STRATEGIES } from "@/lib/shipping/types";
 
 export interface LoginState { error?: string }
 
@@ -242,10 +242,9 @@ export async function updateInternalProductAction(formData: FormData) {
     if (!product) throw new Error("Produto não encontrado.");
     if (!product.supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${product.supplier.name} não opera no mercado ${market}.`);
     const previous = await transaction.productMarketOffer.findFirst({ where: { productId: id, market }, select: { id: true, sellingPrice: true, slug: true } });
-    const usesDynamicShippingQuote = isDynamicShippingStrategy(product.supplier.shippingStrategy);
-    const fixedEstimatedDelivery = usesDynamicShippingQuote ? null : input.estimatedDelivery ?? null;
-    const fixedEstimatedDeliveryMinDays = usesDynamicShippingQuote ? null : estimatedDeliveryMinDays ?? null;
-    const fixedEstimatedDeliveryMaxDays = usesDynamicShippingQuote ? null : estimatedDeliveryMaxDays ?? null;
+    const fixedEstimatedDelivery = input.estimatedDelivery ?? null;
+    const fixedEstimatedDeliveryMinDays = estimatedDeliveryMinDays ?? null;
+    const fixedEstimatedDeliveryMaxDays = estimatedDeliveryMaxDays ?? null;
     await transaction.product.update({
       where: { id },
       data: {

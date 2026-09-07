@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { calculateNomaBrSalePrice } from "@/lib/catalog/pricing";
 import { MARKET_CONFIG, type Market } from "@/lib/market";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
-import { isDynamicShippingStrategy } from "@/lib/shipping/types";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { MANUAL_SUPPLIER_KEY, MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
 
@@ -48,7 +47,7 @@ export interface ManualOfferVariantInput {
 }
 
 export class ManualProductError extends Error {
-  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required" | "delivery-window-required") {
+  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required" | "delivery-window-invalid") {
     super(code);
   }
 }
@@ -81,11 +80,10 @@ export async function createManualProduct(input: ManualProductInput) {
     const productSlug = await availableProductSlug(transaction, input.market === "BR" ? publicSlug : `${publicSlug}-${input.market.toLowerCase()}`);
     const supplierProductId = `manual-${input.market.toLowerCase()}-${publicSlug}`.slice(0, 255);
     const sku = `MANUAL-${input.market}-${publicSlug}`.toUpperCase().slice(0, 255);
-    const usesDynamicShippingQuote = isDynamicShippingStrategy(supplier.shippingStrategy);
-    const estimatedDeliveryMinDays = usesDynamicShippingQuote ? null : input.estimatedDeliveryMinDays ?? null;
-    const estimatedDeliveryMaxDays = usesDynamicShippingQuote ? null : input.estimatedDeliveryMaxDays ?? null;
-    if (!usesDynamicShippingQuote && (estimatedDeliveryMinDays == null || estimatedDeliveryMaxDays == null || estimatedDeliveryMaxDays < estimatedDeliveryMinDays)) {
-      throw new ManualProductError("delivery-window-required");
+    const estimatedDeliveryMinDays = input.estimatedDeliveryMinDays ?? null;
+    const estimatedDeliveryMaxDays = input.estimatedDeliveryMaxDays ?? null;
+    if (estimatedDeliveryMinDays != null && estimatedDeliveryMaxDays != null && estimatedDeliveryMaxDays < estimatedDeliveryMinDays) {
+      throw new ManualProductError("delivery-window-invalid");
     }
     const estimatedDelivery = deliveryLabel(input.market, estimatedDeliveryMinDays, estimatedDeliveryMaxDays);
     const variants = normalizeManualOfferVariants(input);

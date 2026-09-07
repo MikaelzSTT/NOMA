@@ -13,7 +13,7 @@ const messages: Record<string, { tone: "error"; text: string }> = {
   "invalid-supplier": { tone: "error", text: "Fornecedor inválido para o mercado selecionado." },
   "slug-in-use": { tone: "error", text: "Já existe uma oferta com este slug neste mercado." },
   "sale-price-required": { tone: "error", text: "Defina o preço de venda da NOMA para todas as variantes ativas com custo antes de criar/publicar." },
-  "delivery-window-required": { tone: "error", text: "Informe prazo mínimo e máximo para fornecedores sem cotação dinâmica de frete." },
+  "delivery-window-invalid": { tone: "error", text: "Revise o prazo de entrega informado." },
 };
 
 export default async function NewManualProductPage({ searchParams }: Props) {
