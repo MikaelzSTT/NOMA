@@ -2,6 +2,11 @@ import type { Market, Prisma } from "@/generated/prisma/client";
 
 export const SHIPPING_STRATEGIES = ["SUPPLIER_API", "CARRIER_API", "TABLE", "FIXED", "MANUAL", "DISABLED"] as const;
 export type ShippingStrategyCode = typeof SHIPPING_STRATEGIES[number];
+export const DYNAMIC_SHIPPING_STRATEGIES = ["SUPPLIER_API", "CARRIER_API", "TABLE"] as const satisfies readonly ShippingStrategyCode[];
+
+export function isDynamicShippingStrategy(strategy: string | null | undefined): strategy is typeof DYNAMIC_SHIPPING_STRATEGIES[number] {
+  return DYNAMIC_SHIPPING_STRATEGIES.includes(strategy as typeof DYNAMIC_SHIPPING_STRATEGIES[number]);
+}
 
 export type ShippingQuoteRequest = {
   market?: Market;

@@ -85,6 +85,43 @@ describe("createManualProduct", () => {
     }));
   });
 
+  it("permite prazo fixo ausente para fornecedor com frete dinamico", async () => {
+    mocks.transaction.supplier.findUnique.mockResolvedValue({
+      id: "supplier-dynamic",
+      name: "Fornecedor Dinamico",
+      adapterKey: "supplier-api",
+      active: true,
+      supportedMarkets: ["BR"],
+      shippingStrategy: "SUPPLIER_API",
+    });
+
+    await createManualProduct({
+      ...baseInput,
+      supplierId: "supplier-dynamic",
+      estimatedDeliveryMinDays: undefined,
+      estimatedDeliveryMaxDays: undefined,
+    });
+
+    expect(mocks.transaction.product.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ estimatedDelivery: null }),
+    }));
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        estimatedDelivery: null,
+        estimatedDeliveryMinDays: null,
+        estimatedDeliveryMaxDays: null,
+      }),
+    }));
+  });
+
+  it("exige prazo fixo para fornecedor sem frete dinamico", async () => {
+    await expect(createManualProduct({
+      ...baseInput,
+      estimatedDeliveryMinDays: undefined,
+      estimatedDeliveryMaxDays: undefined,
+    })).rejects.toEqual(new ManualProductError("delivery-window-required"));
+  });
+
   it("usa fornecedor existente compatível e grava oferta US em USD", async () => {
     mocks.transaction.supplier.findUnique.mockResolvedValue({ id: "supplier-us", name: "Fornecedor US", adapterKey: "supplier-us", active: true, supportedMarkets: ["US"] });
 

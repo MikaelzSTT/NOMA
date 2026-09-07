@@ -7,6 +7,7 @@ import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/o
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, MARKETS, isMarket, type Market } from "@/lib/market";
+import { isDynamicShippingStrategy } from "@/lib/shipping/types";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -25,6 +26,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
   const editShortDescription = selectedOffer?.shortDescription ?? product.shortDescription ?? "";
   const editDescription = selectedOffer?.description ?? product.description ?? "";
   const initialVariants = toAdminOfferVariants(selectedOffer, product);
+  const hasDynamicDelivery = isDynamicShippingStrategy((selectedOffer?.supplier ?? product.supplier).shippingStrategy);
 
   return (
     <div className="admin-page max-w-5xl">
@@ -66,8 +68,9 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
 
         <section className="admin-panel space-y-4">
           <h2>Entrega</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><MoneyField name="shippingCost" label="Custo de frete" value={selectedOffer?.shippingCost == null ? null : Number(selectedOffer.shippingCost)} /><label className="admin-field">Prazo mínimo<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMinDays ?? ""} /></label><label className="admin-field">Prazo máximo<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" defaultValue={selectedOffer?.estimatedDeliveryMaxDays ?? ""} /></label></div>
-          <label className="admin-field">Prazo estimado<input name="estimatedDelivery" defaultValue={selectedOffer?.estimatedDelivery ?? product.estimatedDelivery ?? ""} /></label>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><MoneyField name="shippingCost" label="Custo de frete" value={selectedOffer?.shippingCost == null ? null : Number(selectedOffer.shippingCost)} /><label className="admin-field">Prazo mínimo<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" defaultValue={hasDynamicDelivery ? "" : selectedOffer?.estimatedDeliveryMinDays ?? ""} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label><label className="admin-field">Prazo máximo<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" defaultValue={hasDynamicDelivery ? "" : selectedOffer?.estimatedDeliveryMaxDays ?? ""} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label></div>
+          <label className="admin-field">Prazo estimado<input name="estimatedDelivery" defaultValue={hasDynamicDelivery ? "" : selectedOffer?.estimatedDelivery ?? product.estimatedDelivery ?? ""} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label>
+          {hasDynamicDelivery && <p className="text-sm text-muted">Prazo e frete serão exibidos após cotação do Shipping Engine.</p>}
         </section>
 
         <section className="admin-panel space-y-4">

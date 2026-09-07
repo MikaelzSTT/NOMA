@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { calculateNomaBrSalePrice } from "@/lib/catalog/pricing";
 import { MARKET_CONFIG, type Market } from "@/lib/market";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
+import { isDynamicShippingStrategy } from "@/lib/shipping/types";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { MANUAL_SUPPLIER_KEY, MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
 
@@ -22,8 +23,8 @@ export interface ManualProductInput {
   compareAtPrice?: number;
   stock: number;
   availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN";
-  estimatedDeliveryMinDays: number;
-  estimatedDeliveryMaxDays: number;
+  estimatedDeliveryMinDays?: number | null;
+  estimatedDeliveryMaxDays?: number | null;
   featured: boolean;
   active: boolean;
   manualPriceOverride?: boolean;
@@ -47,7 +48,7 @@ export interface ManualOfferVariantInput {
 }
 
 export class ManualProductError extends Error {
-  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required") {
+  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required" | "delivery-window-required") {
     super(code);
   }
 }
@@ -80,7 +81,13 @@ export async function createManualProduct(input: ManualProductInput) {
     const productSlug = await availableProductSlug(transaction, input.market === "BR" ? publicSlug : `${publicSlug}-${input.market.toLowerCase()}`);
     const supplierProductId = `manual-${input.market.toLowerCase()}-${publicSlug}`.slice(0, 255);
     const sku = `MANUAL-${input.market}-${publicSlug}`.toUpperCase().slice(0, 255);
-    const estimatedDelivery = deliveryLabel(input.market, input.estimatedDeliveryMinDays, input.estimatedDeliveryMaxDays);
+    const usesDynamicShippingQuote = isDynamicShippingStrategy(supplier.shippingStrategy);
+    const estimatedDeliveryMinDays = usesDynamicShippingQuote ? null : input.estimatedDeliveryMinDays ?? null;
+    const estimatedDeliveryMaxDays = usesDynamicShippingQuote ? null : input.estimatedDeliveryMaxDays ?? null;
+    if (!usesDynamicShippingQuote && (estimatedDeliveryMinDays == null || estimatedDeliveryMaxDays == null || estimatedDeliveryMaxDays < estimatedDeliveryMinDays)) {
+      throw new ManualProductError("delivery-window-required");
+    }
+    const estimatedDelivery = deliveryLabel(input.market, estimatedDeliveryMinDays, estimatedDeliveryMaxDays);
     const variants = normalizeManualOfferVariants(input);
     if (hasActiveVariantWithoutSalePrice(variants)) throw new ManualProductError("sale-price-required");
     const defaultVariant = variants.find((variant) => variant.isDefault) ?? variants[0];
@@ -149,8 +156,8 @@ export async function createManualProduct(input: ManualProductInput) {
         stockQuantity: defaultVariant.stock,
         availability: defaultVariant.availability,
         estimatedDelivery,
-        estimatedDeliveryMinDays: input.estimatedDeliveryMinDays,
-        estimatedDeliveryMaxDays: input.estimatedDeliveryMaxDays,
+        estimatedDeliveryMinDays,
+        estimatedDeliveryMaxDays,
         sourceUrl,
         active: input.active,
         featured: input.featured,
@@ -244,7 +251,8 @@ async function availableProductSlug(transaction: Prisma.TransactionClient, prefe
   return `${base}-${Date.now().toString(36)}`;
 }
 
-function deliveryLabel(market: Market, minDays: number, maxDays: number) {
+function deliveryLabel(market: Market, minDays: number | null, maxDays: number | null) {
+  if (minDays == null || maxDays == null) return null;
   if (market === "US") return `${minDays}-${maxDays} business days`;
   return `${minDays} a ${maxDays} dias úteis`;
 }

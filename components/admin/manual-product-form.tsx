@@ -8,12 +8,14 @@ import { MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-consta
 import { previewToOfferVariants } from "@/lib/admin/url-preview-to-variants";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 import type { ProductUrlImportPreview } from "@/lib/product-import/types";
+import { isDynamicShippingStrategy, type ShippingStrategyCode } from "@/lib/shipping/types";
 import { slugify } from "@/lib/utils";
 
 interface SupplierOption {
   id: string;
   name: string;
   supportedMarkets: Market[];
+  shippingStrategy: ShippingStrategyCode;
 }
 
 type PreviewState =
@@ -46,6 +48,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
   const [description, setDescription] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [variants, setVariants] = useState(defaultVariants);
+  const [selectedSupplierId, setSelectedSupplierId] = useState(`${MANUAL_SUPPLIER_OPTION_PREFIX}BR`);
   const [variantRevision, setVariantRevision] = useState(0);
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
   const currency = MARKET_CONFIG[market].currency;
@@ -53,6 +56,10 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
     () => suppliers.filter((supplier) => supplier.supportedMarkets.includes(market)),
     [market, suppliers],
   );
+  const manualSupplierId = `${MANUAL_SUPPLIER_OPTION_PREFIX}${market}`;
+  const selectedSupplier = supplierOptions.find((supplier) => supplier.id === selectedSupplierId);
+  const selectedShippingStrategy = selectedSupplier?.shippingStrategy ?? "MANUAL";
+  const hasDynamicDelivery = isDynamicShippingStrategy(selectedShippingStrategy);
   const imagesText = images.join("\n");
 
   function updateTitle(value: string) {
@@ -63,6 +70,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
   function updateMarket(value: string) {
     const nextMarket = MARKETS.includes(value as Market) ? value as Market : "BR";
     setMarket(nextMarket);
+    setSelectedSupplierId(`${MANUAL_SUPPLIER_OPTION_PREFIX}${nextMarket}`);
   }
 
   function updateImagesText(value: string) {
@@ -145,7 +153,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
         <h2>Origem</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="admin-field">Mercado<select name="market" value={market} onChange={(event) => updateMarket(event.target.value)}>{MARKETS.map((item) => <option key={item} value={item}>{MARKET_CONFIG[item].label}</option>)}</select></label>
-          <label className="admin-field">Fornecedor<select name="supplierId" defaultValue={`${MANUAL_SUPPLIER_OPTION_PREFIX}${market}`} key={market}><option value={`${MANUAL_SUPPLIER_OPTION_PREFIX}${market}`}>Manual {market}</option>{supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+          <label className="admin-field">Fornecedor<select name="supplierId" value={selectedSupplierId} onChange={(event) => setSelectedSupplierId(event.target.value)}><option value={manualSupplierId}>Manual {market}</option>{supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
         </div>
         <label className="admin-field">URL original do produto<input name="sourceUrl" type="url" required placeholder="https://..." value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label>
       </section>
@@ -183,9 +191,10 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
       <section className="admin-panel space-y-4">
         <h2>Entrega</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="admin-field">Prazo mínimo de entrega<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" required /></label>
-          <label className="admin-field">Prazo máximo de entrega<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" required /></label>
+          <label className="admin-field">Prazo mínimo de entrega<input name="estimatedDeliveryMinDays" type="number" min="0" step="1" required={!hasDynamicDelivery} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label>
+          <label className="admin-field">Prazo máximo de entrega<input name="estimatedDeliveryMaxDays" type="number" min="0" step="1" required={!hasDynamicDelivery} disabled={hasDynamicDelivery} placeholder={hasDynamicDelivery ? "Vem da cotação" : undefined} /></label>
         </div>
+        {hasDynamicDelivery && <p className="text-sm text-muted">Prazo e frete serão exibidos após cotação do Shipping Engine.</p>}
       </section>
 
       <section className="admin-panel space-y-4">

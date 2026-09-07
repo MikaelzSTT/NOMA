@@ -35,7 +35,10 @@ import { upsertCatalogProduct } from "@/services/catalog-products";
 import { resolveMarketRedirect } from "@/proxy";
 
 describe("mercados públicos", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.brOffer.supplier.shippingStrategy = "FIXED";
+  });
 
   it("BR nunca consulta oferta US e usa BRL", async () => {
     const { products } = await getHomeData({ market: "BR" });
@@ -54,6 +57,14 @@ describe("mercados públicos", () => {
     const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
     expect(product).not.toHaveProperty("costPrice");
     expect(product?.variants[0]).not.toHaveProperty("costPrice");
+  });
+
+  it("oculta prazo cadastrado quando fornecedor usa cotacao dinamica", async () => {
+    mocks.brOffer.supplier.shippingStrategy = "SUPPLIER_API";
+
+    const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(product?.estimatedDelivery).toBeNull();
   });
 
   it("preferência manual em cookie vence detecção automática", () => {
@@ -111,7 +122,7 @@ function offerRow(market: "BR" | "US", slug: string, currency: "BRL" | "USD", se
     popularityScore: 10,
     updatedAt: new Date("2026-01-01"),
     productId: "product-1",
-    supplier: { id: "supplier-1", name: "Supplier", slug: "supplier" },
+    supplier: { id: "supplier-1", name: "Supplier", slug: "supplier", shippingStrategy: "FIXED" },
     costPrice: market === "US" ? 900 : 4000,
     product: {
       id: "product-1",

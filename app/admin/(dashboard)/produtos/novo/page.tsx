@@ -13,6 +13,7 @@ const messages: Record<string, { tone: "error"; text: string }> = {
   "invalid-supplier": { tone: "error", text: "Fornecedor inválido para o mercado selecionado." },
   "slug-in-use": { tone: "error", text: "Já existe uma oferta com este slug neste mercado." },
   "sale-price-required": { tone: "error", text: "Defina o preço de venda da NOMA para todas as variantes ativas com custo antes de criar/publicar." },
+  "delivery-window-required": { tone: "error", text: "Informe prazo mínimo e máximo para fornecedores sem cotação dinâmica de frete." },
 };
 
 export default async function NewManualProductPage({ searchParams }: Props) {
@@ -21,7 +22,7 @@ export default async function NewManualProductPage({ searchParams }: Props) {
   const message = typeof raw.saved === "string" ? messages[raw.saved] : undefined;
   const suppliers = await db.supplier.findMany({
     where: { active: true, adapterKey: { notIn: Object.values(MANUAL_SUPPLIER_KEY) } },
-    select: { id: true, name: true, supportedMarkets: true },
+    select: { id: true, name: true, supportedMarkets: true, shippingStrategy: true },
     orderBy: { name: "asc" },
   });
 

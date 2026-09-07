@@ -74,6 +74,7 @@ export function ProductDetailPurchase({
   const selectedShippingQuote = shippingQuotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null;
   const requiresShippingQuote = market === "BR" && !requiresAssistedPurchase;
   const canStartCheckout = market === "BR" && !requiresAssistedPurchase && (!variants.length || Boolean(selectedVariantId)) && Boolean(selectedShippingQuote) && isShippingAddressComplete(shippingAddress);
+  const displayedDeliveryEstimate = selectedShippingQuote ? deliveryEstimate(selectedShippingQuote) : estimatedDelivery;
 
   useEffect(() => {
     trackNomaPurchaseIntent({
@@ -108,7 +109,7 @@ export function ProductDetailPurchase({
         {installmentText && <p className={styles.installments}>{installmentText}</p>}
         <div className={styles.commerceDetails}>
           <p><Store size={16} /><span>{market === "US" ? "Supplied by" : "Fornecido por"} <strong>{supplierName}</strong></span></p>
-          {estimatedDelivery && <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {estimatedDelivery}</span></p>}
+          {displayedDeliveryEstimate && <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {displayedDeliveryEstimate}</span></p>}
         </div>
         {market === "BR" && (
           <form className={styles.shippingBox} onSubmit={handleShippingQuote}>

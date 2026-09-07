@@ -16,7 +16,7 @@ import { calculateNomaBrSalePrice } from "@/services/pricing";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
-import { SHIPPING_STRATEGIES } from "@/lib/shipping/types";
+import { SHIPPING_STRATEGIES, isDynamicShippingStrategy } from "@/lib/shipping/types";
 
 export interface LoginState { error?: string }
 
@@ -84,6 +84,7 @@ const imageUrl = z.string().trim().min(1).refine((value) => {
 
 const optionalMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative().optional());
 const requiredMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative());
+const optionalDeliveryDays = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional());
 const availabilitySchema = z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]);
 const variantSchema = z.object({
   label: z.string().trim().min(1).max(300),
@@ -123,13 +124,13 @@ const createManualProductSchema = z.object({
   compareAtPrice: optionalMoney,
   stock: z.coerce.number().int().nonnegative(),
   availability: availabilitySchema,
-  estimatedDeliveryMinDays: z.coerce.number().int().nonnegative(),
-  estimatedDeliveryMaxDays: z.coerce.number().int().nonnegative(),
+  estimatedDeliveryMinDays: optionalDeliveryDays,
+  estimatedDeliveryMaxDays: optionalDeliveryDays,
   featured: z.boolean().default(false),
   active: z.boolean().default(false),
   manualPriceOverride: z.boolean().default(true),
   variants: variantsSchema,
-}).refine((value) => value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
+}).refine((value) => value.estimatedDeliveryMaxDays == null || value.estimatedDeliveryMinDays == null || value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
   path: ["estimatedDeliveryMaxDays"],
 });
 
@@ -179,8 +180,8 @@ const editProductSchema = z.object({
   availability: z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]),
   shippingCost: optionalMoney,
   estimatedDelivery: z.string().trim().max(300).optional(),
-  estimatedDeliveryMinDays: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional()),
-  estimatedDeliveryMaxDays: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional()),
+  estimatedDeliveryMinDays: optionalDeliveryDays,
+  estimatedDeliveryMaxDays: optionalDeliveryDays,
   pricingRuleType: z.enum(["FIXED_MARGIN", "MARKUP"]).optional(),
   pricingRuleValue: optionalMoney,
   manualPriceOverride: z.boolean().default(false),
@@ -237,10 +238,14 @@ export async function updateInternalProductAction(formData: FormData) {
   ]);
   const sellingPrice = defaultVariant.salePrice;
   await db.$transaction(async (transaction) => {
-    const product = await transaction.product.findUnique({ where: { id }, select: { id: true, slug: true, sku: true, supplierId: true, supplierProductId: true, supplier: { select: { id: true, name: true, supportedMarkets: true } } } });
+    const product = await transaction.product.findUnique({ where: { id }, select: { id: true, slug: true, sku: true, supplierId: true, supplierProductId: true, supplier: { select: { id: true, name: true, supportedMarkets: true, shippingStrategy: true } } } });
     if (!product) throw new Error("Produto não encontrado.");
     if (!product.supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${product.supplier.name} não opera no mercado ${market}.`);
     const previous = await transaction.productMarketOffer.findFirst({ where: { productId: id, market }, select: { id: true, sellingPrice: true, slug: true } });
+    const usesDynamicShippingQuote = isDynamicShippingStrategy(product.supplier.shippingStrategy);
+    const fixedEstimatedDelivery = usesDynamicShippingQuote ? null : input.estimatedDelivery ?? null;
+    const fixedEstimatedDeliveryMinDays = usesDynamicShippingQuote ? null : estimatedDeliveryMinDays ?? null;
+    const fixedEstimatedDeliveryMaxDays = usesDynamicShippingQuote ? null : estimatedDeliveryMaxDays ?? null;
     await transaction.product.update({
       where: { id },
       data: {
@@ -255,7 +260,7 @@ export async function updateInternalProductAction(formData: FormData) {
           compareAtPrice: defaultVariant.compareAtPrice ?? null,
           discountPercent: calculateDiscount(sellingPrice, defaultVariant.compareAtPrice),
           shippingCost: input.shippingCost ?? null,
-          estimatedDelivery: input.estimatedDelivery ?? null,
+          estimatedDelivery: fixedEstimatedDelivery,
           pricingRuleType: input.pricingRuleType ?? null,
           pricingRuleValue: input.pricingRuleValue ?? null,
           stock: defaultVariant.stock,
@@ -287,9 +292,9 @@ export async function updateInternalProductAction(formData: FormData) {
       stockQuantity: defaultVariant.stock,
       availability: defaultVariant.availability,
       shippingCost: input.shippingCost ?? null,
-      estimatedDelivery: input.estimatedDelivery ?? null,
-      estimatedDeliveryMinDays: estimatedDeliveryMinDays ?? null,
-      estimatedDeliveryMaxDays: estimatedDeliveryMaxDays ?? null,
+      estimatedDelivery: fixedEstimatedDelivery,
+      estimatedDeliveryMinDays: fixedEstimatedDeliveryMinDays,
+      estimatedDeliveryMaxDays: fixedEstimatedDeliveryMaxDays,
       sourceUrl: input.sourceUrl ?? null,
       active: input.active,
       featured: input.featured,

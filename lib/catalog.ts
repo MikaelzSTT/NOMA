@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { Market } from "@/lib/market";
+import { isDynamicShippingStrategy } from "@/lib/shipping/types";
 import type { ProductFilters } from "@/lib/validation/product";
 
 const offerSelect = {
@@ -32,7 +33,7 @@ const offerSelect = {
     select: { id: true, label: true, sku: true, attributes: true, salePrice: true, compareAtPrice: true, stock: true, availability: true, imageUrl: true, isDefault: true, position: true },
     orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
   },
-  supplier: { select: { id: true, name: true, slug: true } },
+  supplier: { select: { id: true, name: true, slug: true, shippingStrategy: true } },
   product: {
     select: {
       id: true,
@@ -336,7 +337,7 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     stock: defaultOfferVariant?.stock ?? offer.stockQuantity,
     availability: defaultOfferVariant?.availability ?? offer.availability,
     shippingCost: offer.shippingCost == null ? null : Number(offer.shippingCost),
-    estimatedDelivery: offer.estimatedDelivery,
+    estimatedDelivery: isDynamicShippingStrategy(offer.supplier.shippingStrategy) ? null : offer.estimatedDelivery,
     attributes: publicAttributes(product.attributes),
     featured: offer.featured,
     rating: product.rating == null ? null : Number(product.rating),
@@ -345,7 +346,7 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     updatedAt: offer.updatedAt,
     categoryId: product.categoryId,
     brandId: product.brandId,
-    supplier: offer.supplier,
+    supplier: { id: offer.supplier.id, name: offer.supplier.name, slug: offer.supplier.slug },
     category: product.category,
     brand: product.brand,
     images,
