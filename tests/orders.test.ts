@@ -127,7 +127,21 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
     await expectCheckoutError("product_unavailable");
   });
 
-  it("ignora preco adulterado pelo navegador porque o input nao participa do calculo", async () => {
+  it("ignora preco de produto e frete adulterado pelo navegador porque o input nao participa do calculo", async () => {
+    mocks.db.productMarketOffer.findFirst.mockResolvedValue(offerFixture({
+      shippingCost: null,
+      estimatedDeliveryMinDays: null,
+      estimatedDeliveryMaxDays: null,
+      supplier: supplierFixture({ shippingStrategy: "TABLE", shippingActive: true, shippingCheckoutEnabled: true }),
+    }));
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({
+      serviceCode: "br-region-table",
+      serviceName: "Entrega",
+      price: 169,
+      estimatedMinDays: null,
+      estimatedMaxDays: null,
+      strategy: "TABLE",
+    }));
     const createPreference = vi.fn(async (_input: MercadoPagoPreferenceInput) => {
       void _input;
       return { id: "pref-1", init_point: "https://mp.test/checkout", sandbox_init_point: undefined };
@@ -149,7 +163,14 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
 
     const preferenceInput = createPreference.mock.calls[0]?.[0];
     expect(preferenceInput?.body.items[0]?.unit_price).toBe(1234.56);
-    expect(preferenceInput?.body.shipments?.cost).toBe(120);
+    expect(preferenceInput?.body.shipments?.cost).toBe(169);
+    expect(mocks.db.order.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      shippingAmount: 169,
+      shippingServiceCode: "br-region-table",
+      shippingEstimatedMinDays: null,
+      shippingEstimatedMaxDays: null,
+      total: 1403.56,
+    }) });
   });
 
   it(">= R$ 10.000 entra em compra assistida", async () => {

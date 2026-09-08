@@ -2,8 +2,10 @@ import "server-only";
 
 import type { Market, Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { normalizeBrazilianPostalCode } from "@/lib/shipping/br-postal-code";
 import { fixedShippingAdapter } from "@/lib/shipping/adapters/fixed";
 import { manualShippingAdapter } from "@/lib/shipping/adapters/manual";
+import { tableShippingAdapter } from "@/lib/shipping/adapters/table";
 import {
   ShippingQuoteError,
   type AdapterShippingQuote,
@@ -17,6 +19,7 @@ import {
 const SHIPPING_QUOTE_TTL_MS = 30 * 60 * 1000;
 const SHIPPING_ADAPTER_TIMEOUT_MS = 6_000;
 const DEFAULT_ADAPTERS: Partial<Record<ShippingStrategyCode, ShippingAdapter>> = {
+  TABLE: tableShippingAdapter,
   FIXED: fixedShippingAdapter,
   MANUAL: manualShippingAdapter,
 };
@@ -156,13 +159,7 @@ export async function revalidateShippingQuote(input: {
 
 export { offerInclude as shippingOfferInclude };
 
-export function normalizeBrazilianPostalCode(value: string) {
-  const digits = value.replace(/\D/g, "");
-  if (!/^\d{8}$/.test(digits) || /^(\d)\1{7}$/.test(digits)) {
-    throw new ShippingQuoteError("invalid_postal_code", 400, "CEP invalido.");
-  }
-  return digits;
-}
+export { normalizeBrazilianPostalCode };
 
 function validateOfferForShipping(offer: OfferForShipping | null, input: ShippingQuoteRequest):
   | { type: "valid"; offer: OfferForShipping; variant: OfferForShipping["variants"][number] | null }

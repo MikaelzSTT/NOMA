@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { db } from "@/lib/db";
 import { syncProductsWithAdapter } from "@/lib/catalog/sync-products";
+import { DEFAULT_BR_REGION_TABLE_CONFIG } from "@/lib/shipping/adapters/table";
 import { slugify } from "@/lib/utils";
 import { MockSupplierAdapter } from "@/suppliers/adapters/mock-supplier-adapter";
 
@@ -8,8 +9,30 @@ async function seed() {
   const adapter = new MockSupplierAdapter();
   const supplier = await db.supplier.upsert({
     where: { adapterKey: adapter.key },
-    update: { name: adapter.name, active: true, authorized: true, capabilities: [...adapter.capabilities], supportedMarkets: ["BR"] },
-    create: { name: adapter.name, slug: slugify(adapter.key), adapterKey: adapter.key, active: true, authorized: true, capabilities: [...adapter.capabilities], supportedMarkets: ["BR"] },
+    update: {
+      name: adapter.name,
+      active: true,
+      authorized: true,
+      capabilities: [...adapter.capabilities],
+      supportedMarkets: ["BR"],
+      shippingStrategy: "TABLE",
+      shippingActive: true,
+      shippingCheckoutEnabled: true,
+      shippingConfig: { brRegionTable: DEFAULT_BR_REGION_TABLE_CONFIG },
+    },
+    create: {
+      name: adapter.name,
+      slug: slugify(adapter.key),
+      adapterKey: adapter.key,
+      active: true,
+      authorized: true,
+      capabilities: [...adapter.capabilities],
+      supportedMarkets: ["BR"],
+      shippingStrategy: "TABLE",
+      shippingActive: true,
+      shippingCheckoutEnabled: true,
+      shippingConfig: { brRegionTable: DEFAULT_BR_REGION_TABLE_CONFIG },
+    },
   });
   const existingRule = await db.pricingRule.findFirst({ where: { supplierId: supplier.id, name: "Markup demonstrativo 1.8" } });
   if (!existingRule) {

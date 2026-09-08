@@ -132,6 +132,56 @@ describe("Shipping Engine NOMA", () => {
     expect(mocks.db.shippingQuote.create).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ["SP", "01310-100", 169],
+    ["PR", "80010-000", 220],
+    ["RJ", "20040-020", 220],
+    ["GO", "74000-000", 550],
+    ["BA", "40020-000", 550],
+    ["AM", "69005-040", 850],
+  ])("TABLE BR calcula %s pelo CEP e persiste ShippingQuote", async (_state, postalCode, price) => {
+    mocks.db.productMarketOffer.findUnique.mockResolvedValue(offerFixture({
+      shippingCost: null,
+      estimatedDeliveryMinDays: null,
+      estimatedDeliveryMaxDays: null,
+      supplier: supplierFixture({ shippingStrategy: "TABLE", shippingActive: true, shippingCheckoutEnabled: true }),
+    }));
+
+    const result = await quoteShipping(baseQuoteInput({ destinationPostalCode: postalCode }), {
+      now: new Date("2026-09-03T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      type: "quotes",
+      quotes: [{
+        serviceCode: "br-region-table",
+        serviceName: "Entrega",
+        price,
+        currency: "BRL",
+        estimatedMinDays: null,
+        estimatedMaxDays: null,
+      }],
+    });
+    expect(mocks.db.shippingQuote.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      strategy: "TABLE",
+      price,
+      destinationPostalCode: postalCode.replace(/\D/g, ""),
+      estimatedMinDays: null,
+      estimatedMaxDays: null,
+      rawResponse: expect.objectContaining({ destinationState: _state }),
+    }) });
+  });
+
+  it("TABLE BR rejeita CEP cuja UF nao pode ser resolvida", async () => {
+    mocks.db.productMarketOffer.findUnique.mockResolvedValue(offerFixture({
+      supplier: supplierFixture({ shippingStrategy: "TABLE", shippingActive: true, shippingCheckoutEnabled: true }),
+    }));
+
+    await expect(quoteShipping(baseQuoteInput({ destinationPostalCode: "00001-000" })))
+      .rejects.toMatchObject({ code: "postal_code_state_unresolved" });
+    expect(mocks.db.shippingQuote.create).not.toHaveBeenCalled();
+  });
+
   it("nao ativa US acidentalmente", async () => {
     mocks.db.productMarketOffer.findUnique.mockResolvedValue(offerFixture({ market: "US", currency: "USD" }));
 
@@ -149,6 +199,59 @@ describe("Shipping Engine NOMA", () => {
       destinationPostalCode: "01310-100",
       quantity: 1,
     }, { now: new Date("2026-09-03T12:00:00.000Z") })).rejects.toMatchObject({ code: "shipping_quote_changed" });
+  });
+
+  it("revalida quote TABLE vigente recalculando UF e preco", async () => {
+    const offer = offerFixture({
+      shippingCost: null,
+      estimatedDeliveryMinDays: null,
+      estimatedDeliveryMaxDays: null,
+      supplier: supplierFixture({ shippingStrategy: "TABLE", shippingActive: true, shippingCheckoutEnabled: true }),
+    }) as unknown as Parameters<typeof revalidateShippingQuote>[0]["offer"];
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({
+      serviceCode: "br-region-table",
+      serviceName: "Entrega",
+      price: 169,
+      estimatedMinDays: null,
+      estimatedMaxDays: null,
+      strategy: "TABLE",
+      rawResponse: { destinationState: "SP" },
+    }));
+
+    const quote = await revalidateShippingQuote({
+      quoteId: "quote-1",
+      offer,
+      variant: offer.variants[0],
+      destinationPostalCode: "01310-100",
+      quantity: 1,
+    }, { now: new Date("2026-09-03T12:00:00.000Z") });
+
+    expect(quote).toMatchObject({ quoteId: "quote-1", price: 169, serviceCode: "br-region-table" });
+    expect(mocks.db.shippingQuote.update).toHaveBeenCalledWith({
+      where: { id: "quote-1" },
+      data: { revalidatedAt: new Date("2026-09-03T12:00:00.000Z") },
+    });
+  });
+
+  it("bloqueia quote TABLE expirada antes de revalidar", async () => {
+    const offer = offerFixture({
+      supplier: supplierFixture({ shippingStrategy: "TABLE", shippingActive: true, shippingCheckoutEnabled: true }),
+    }) as unknown as Parameters<typeof revalidateShippingQuote>[0]["offer"];
+    mocks.db.shippingQuote.findUnique.mockResolvedValue(shippingQuoteFixture({
+      serviceCode: "br-region-table",
+      price: 169,
+      strategy: "TABLE",
+      expiresAt: new Date("2026-09-03T11:59:59.000Z"),
+    }));
+
+    await expect(revalidateShippingQuote({
+      quoteId: "quote-1",
+      offer,
+      variant: offer.variants[0],
+      destinationPostalCode: "01310-100",
+      quantity: 1,
+    }, { now: new Date("2026-09-03T12:00:00.000Z") })).rejects.toMatchObject({ code: "shipping_quote_expired" });
+    expect(mocks.db.shippingQuote.update).not.toHaveBeenCalled();
   });
 });
 

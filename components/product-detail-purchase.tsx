@@ -74,7 +74,7 @@ export function ProductDetailPurchase({
   const selectedShippingQuote = shippingQuotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null;
   const requiresShippingQuote = market === "BR" && !requiresAssistedPurchase;
   const canStartCheckout = market === "BR" && !requiresAssistedPurchase && (!variants.length || Boolean(selectedVariantId)) && Boolean(selectedShippingQuote) && isShippingAddressComplete(shippingAddress);
-  const displayedDeliveryEstimate = shippingQuoteDeliveryEstimate(selectedShippingQuote) ?? estimatedDelivery;
+  const displayedDeliveryEstimate = selectedShippingQuote ? shippingQuoteDeliveryEstimate(selectedShippingQuote) : estimatedDelivery;
 
   useEffect(() => {
     trackNomaPurchaseIntent({
@@ -113,7 +113,7 @@ export function ProductDetailPurchase({
         </div>
         {market === "BR" && (
           <form className={styles.shippingBox} onSubmit={handleShippingQuote}>
-            <label htmlFor="shipping-postal-code">Calcule o frete e prazo</label>
+            <label htmlFor="shipping-postal-code">Calcule o frete</label>
             <div className={styles.shippingFormRow}>
               <input
                 id="shipping-postal-code"
@@ -143,10 +143,9 @@ export function ProductDetailPurchase({
                     />
                     <Truck size={17} aria-hidden="true" />
                     <span>
-                      <strong>{quote.serviceName}</strong>
-                      <small>{shippingOptionDeliveryEstimate(quote)}</small>
+                      <strong>Frete: {formatMoney(quote.price, quote.currency)}</strong>
+                      <small>Prazo de entrega confirmado após a compra.</small>
                     </span>
-                    <b>{formatMoney(quote.price, quote.currency)}</b>
                   </label>
                 ))}
               </div>
@@ -383,10 +382,6 @@ function shippingQuoteDeliveryEstimate(quote: ShippingQuoteOption | null) {
   }
   if (quote.estimatedMaxDays != null) return `Ate ${quote.estimatedMaxDays} dias uteis`;
   return null;
-}
-
-function shippingOptionDeliveryEstimate(quote: ShippingQuoteOption) {
-  return shippingQuoteDeliveryEstimate(quote) ?? "Prazo a confirmar";
 }
 
 function isShippingAddressComplete(address: ShippingAddressState) {

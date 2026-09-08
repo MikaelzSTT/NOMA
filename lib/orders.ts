@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { createMercadoPagoPreference, getMercadoPagoPayment, type MercadoPagoPayment } from "@/lib/mercado-pago";
 import { NOMA_TRAFFIC_ATTRIBUTION_COOKIE, NOMA_TRAFFIC_SESSION_COOKIE, purchaseAttributionFromCookie } from "@/lib/noma-traffic";
+import { resolveBrazilianStateFromPostalCode } from "@/lib/shipping/br-postal-code";
 import { normalizeBrazilianPostalCode, revalidateShippingQuote, shippingOfferInclude } from "@/lib/shipping/engine";
 import { ShippingQuoteError, type NormalizedShippingQuote, type ShippingAdapter, type ShippingStrategyCode } from "@/lib/shipping/types";
 import { absoluteUrl } from "@/lib/utils";
@@ -471,9 +472,13 @@ function normalizeShippingAddress(value: ShippingAddressInput | null | undefined
   const complement = sanitizeText(value.complement, 120);
   const neighborhood = sanitizeText(value.neighborhood, 120);
   const city = sanitizeText(value.city, 120);
-  const state = sanitizeText(value.state, 2)?.toUpperCase() ?? null;
-  if (!recipientName || !street || !number || !neighborhood || !city || !state || !/^[A-Z]{2}$/.test(state)) return null;
-  return { recipientName, postalCode, street, number, complement, neighborhood, city, state };
+  const submittedState = sanitizeText(value.state, 2)?.toUpperCase() ?? null;
+  const resolvedState = resolveBrazilianStateFromPostalCode(postalCode);
+  if (!recipientName || !street || !number || !neighborhood || !city) return null;
+  if (submittedState && submittedState !== resolvedState) {
+    throw new ShippingQuoteError("shipping_address_state_mismatch", 400, "O estado do endereco precisa corresponder ao CEP.");
+  }
+  return { recipientName, postalCode, street, number, complement, neighborhood, city, state: resolvedState };
 }
 
 function sanitizeText(value: string | null | undefined, maxLength: number) {
