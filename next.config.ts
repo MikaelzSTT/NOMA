@@ -13,6 +13,8 @@ const scriptSources = [
 ];
 const connectSources = [
   "'self'",
+  "https://blob.vercel-storage.com",
+  "https://*.blob.vercel-storage.com",
   ...(hasGoogleTracking
     ? [
       "https://www.google-analytics.com",

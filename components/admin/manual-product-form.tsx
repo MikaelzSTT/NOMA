@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ImageOff, Link2, LoaderCircle, Save, Search, X } from "lucide-react";
+import { Link2, LoaderCircle, Save, Search } from "lucide-react";
 import { createManualProductAction } from "@/app/admin/actions";
 import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/offer-variant-fields";
+import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
 import { previewToOfferVariants } from "@/lib/admin/url-preview-to-variants";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
@@ -57,7 +58,6 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
     [market, suppliers],
   );
   const manualSupplierId = `${MANUAL_SUPPLIER_OPTION_PREFIX}${market}`;
-  const imagesText = images.join("\n");
 
   function updateTitle(value: string) {
     setTitle(value);
@@ -68,14 +68,6 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
     const nextMarket = MARKETS.includes(value as Market) ? value as Market : "BR";
     setMarket(nextMarket);
     setSelectedSupplierId(`${MANUAL_SUPPLIER_OPTION_PREFIX}${nextMarket}`);
-  }
-
-  function updateImagesText(value: string) {
-    setImages(value.split(/\r?\n/).map((imageUrl) => imageUrl.trim()).filter(Boolean));
-  }
-
-  function removeImage(url: string) {
-    setImages((current) => current.filter((imageUrl) => imageUrl !== url));
   }
 
   async function fetchPreview() {
@@ -164,23 +156,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
           <label className="admin-field">Marca<input name="brand" value={brand} onChange={(event) => setBrand(event.target.value)} maxLength={120} /></label>
         </div>
         <label className="admin-field">Descrição<textarea name="description" rows={6} maxLength={30000} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
-        <label className="admin-field">Imagens por URL<textarea name="images" rows={6} required placeholder="https://cdn.../imagem-1.jpg&#10;https://cdn.../imagem-2.jpg" value={imagesText} onChange={(event) => updateImagesText(event.target.value)} /></label>
-        {images.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {images.map((imageUrl) => (
-              <div key={imageUrl} className="overflow-hidden rounded-sm border border-border bg-white">
-                <div className="aspect-square bg-surface">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
-                </div>
-                <button type="button" className="flex w-full items-center justify-center gap-1 px-2 py-2 text-xs font-bold text-muted hover:text-ink" onClick={() => removeImage(imageUrl)}>
-                  <X size={14} /> Remover
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {images.length === 0 && <p className="flex items-center gap-2 text-sm text-muted"><ImageOff size={16} /> Nenhuma imagem selecionada.</p>}
+        <ProductImageManager key={images.join("\n")} initialImages={images} required />
       </section>
 
       <OfferVariantFields key={variantRevision} currency={currency} initialVariants={variants} />

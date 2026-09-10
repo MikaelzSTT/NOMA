@@ -14,6 +14,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { syncProducts } from "@/services/sync-products";
 import { calculateNomaBrSalePrice } from "@/services/pricing";
 import { calculateDiscount, slugify } from "@/lib/utils";
+import { productImageStorageFields } from "@/lib/product-image-storage";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
 import { SHIPPING_STRATEGIES } from "@/lib/shipping/types";
@@ -271,7 +272,7 @@ export async function updateInternalProductAction(formData: FormData) {
         } : {}),
         categoryId: category.id,
         brandId: brand?.id ?? null,
-        ...(market === "BR" ? { images: { deleteMany: {}, create: images.map((url, position) => ({ url, sourceUrl: url, storageKey: url.startsWith("/") ? url : null, storageStatus: url.startsWith("/") ? "STORED" : "EXTERNAL", position, isPrimary: position === 0, alt: input.title })) } } : {}),
+        ...(market === "BR" ? { images: { deleteMany: {}, create: images.map((url, position) => ({ url, sourceUrl: url, ...productImageStorageFields(url), position, isPrimary: position === 0, alt: input.title })) } } : {}),
       },
     });
     const offerData = {

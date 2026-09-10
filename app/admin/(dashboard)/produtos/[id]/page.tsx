@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Save } from "lucide-react";
 import { notFound } from "next/navigation";
 import { updateInternalProductAction } from "@/app/admin/actions";
 import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/offer-variant-fields";
+import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, MARKETS, isMarket, type Market } from "@/lib/market";
@@ -59,7 +60,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
           <label className="admin-field">URL original do produto<input name="sourceUrl" type="url" defaultValue={selectedOffer?.sourceUrl ?? product.sourceUrl ?? ""} /></label>
           <label className="admin-field">Descrição curta<textarea name="shortDescription" rows={2} defaultValue={editShortDescription} maxLength={800} /></label>
           <label className="admin-field">Descrição completa<textarea name="description" rows={6} defaultValue={editDescription} maxLength={30000} /></label>
-          <label className="admin-field">Imagens — uma URL ou caminho local por linha<textarea name="images" rows={5} defaultValue={offerImages.join("\n")} placeholder="https://cdn.../imagem.jpg" /></label>
+          <ProductImageManager initialImages={offerImages} />
         </section>
 
         <OfferVariantFields currency={MARKET_CONFIG[selectedMarket].currency} initialVariants={initialVariants} />

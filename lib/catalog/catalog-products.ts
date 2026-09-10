@@ -5,6 +5,7 @@ import type { NormalizedSupplierProduct } from "@/lib/catalog/supplier-types";
 import { canonicalProductHash } from "@/lib/catalog/product-hash";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
 import { MARKET_CONFIG, type Market } from "@/lib/market";
+import { productImageStorageFields } from "@/lib/product-image-storage";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { normalizedSupplierProductSchema } from "@/lib/validation/catalog-product";
 
@@ -167,8 +168,7 @@ export async function upsertCatalogProductInTransaction(
   const images = parsed.images.map((image, position) => ({
     url: image.url,
     sourceUrl: image.url,
-    storageKey: image.url.startsWith("/") ? image.url : null,
-    storageStatus: image.url.startsWith("/") ? "STORED" as const : "EXTERNAL" as const,
+    ...productImageStorageFields(image.url),
     alt: image.alt ?? parsed.title,
     position,
     isPrimary: image.isPrimary ?? position === 0,

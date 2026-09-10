@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { calculateNomaBrSalePrice } from "@/lib/catalog/pricing";
 import { MARKET_CONFIG, type Market } from "@/lib/market";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
+import { productImageStorageFields } from "@/lib/product-image-storage";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { MANUAL_SUPPLIER_KEY, MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
 
@@ -94,8 +95,7 @@ export async function createManualProduct(input: ManualProductInput) {
     const images = input.images.map((url, position) => ({
       url,
       sourceUrl: url,
-      storageKey: url.startsWith("/") ? url : null,
-      storageStatus: url.startsWith("/") ? "STORED" as const : "EXTERNAL" as const,
+      ...productImageStorageFields(url),
       alt: input.title,
       position,
       isPrimary: position === 0,
