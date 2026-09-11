@@ -57,7 +57,8 @@ export function ProductVariantSelector({
             <fieldset className={styles.variantGroup} key={group.key}>
               <legend>{group.label}</legend>
               <div className={styles.variantOptions}>
-                {group.values.map((value) => {
+                {group.options.map((option) => {
+                  const value = option.value;
                   const candidate = findVariantForAttribute(options, groups, selected, group.key, value);
                   const isSelected = selected ? String(selected.attributes[group.key]) === value : false;
                   const disabled = !candidate || !variantIsSelectable(candidate);
@@ -72,7 +73,7 @@ export function ProductVariantSelector({
                       onClick={() => candidate && selectVariant(candidate)}
                     >
                       {isSelected && <Check size={13} aria-hidden="true" />}
-                      <span>{value}</span>
+                      <span>{option.label}</span>
                     </button>
                   );
                 })}
