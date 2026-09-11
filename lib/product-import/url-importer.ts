@@ -28,28 +28,64 @@ const FETCH_TIMEOUT_MS = 6_000;
 const MAX_RESPONSE_BYTES = 2_000_000;
 const adapters: ProductImportAdapter[] = [colchoesAcordeBemAdapter, sleepHouseAdapter];
 
+type ProductUrlImportStage = "url-validation" | "html-fetch" | "public-json-fetch" | "public-json-parse" | "public-json-normalization";
+
+interface ProductUrlImportErrorDetails {
+  stage?: ProductUrlImportStage;
+  hostname?: string;
+  upstreamStatus?: number;
+}
+
 export class ProductUrlImportError extends Error {
-  constructor(readonly code: "invalid-url" | "blocked-url" | "fetch-failed" | "invalid-response") {
+  constructor(
+    readonly code: "invalid-url" | "blocked-url" | "fetch-failed" | "invalid-response",
+    readonly details: ProductUrlImportErrorDetails = {},
+  ) {
     super(code);
+    this.name = "ProductUrlImportError";
   }
+}
+
+export function safeProductUrlImportError(error: unknown) {
+  if (error instanceof ProductUrlImportError) {
+    return { error: error.name, code: error.code, ...error.details };
+  }
+  return { error: error instanceof Error ? error.name : "UnknownError" };
 }
 
 export async function previewProductFromUrl(rawUrl: string): Promise<ProductUrlImportPreview> {
   const initialUrl = await validatePublicProductUrl(rawUrl);
+  const initialAdapter = findAdapter(initialUrl);
   let fetched: { url: URL; html: string };
   try {
     fetched = await fetchHtml(initialUrl);
   } catch (error) {
-    const preview = await fetchPreviewWithDirectAdapter(initialUrl);
-    if (preview) return preview;
-    throw error;
+    logImportStageFailure("html-fetch", initialAdapter, initialUrl, error);
+    if (!initialAdapter?.fetchPreview) throw error;
+    try {
+      const preview = await fetchPreviewWithDirectAdapter(initialUrl, initialAdapter);
+      if (preview) return preview;
+      const normalizationError = new ProductUrlImportError("invalid-response", {
+        stage: "public-json-normalization",
+        hostname: initialUrl.hostname,
+      });
+      logImportStageFailure("public-json-normalization", initialAdapter, initialUrl, normalizationError);
+      throw normalizationError;
+    } catch (fallbackError) {
+      if (!(fallbackError instanceof ProductUrlImportError && fallbackError.details.stage === "public-json-normalization")) {
+        logImportStageFailure("public-json-fetch", initialAdapter, initialUrl, fallbackError);
+      }
+      throw fallbackError;
+    }
   }
-  const preview = parseProductHtmlWithAdapters(fetched.html, fetched.url);
-  return applyRemoteAdapter(preview, fetched.html, fetched.url);
+  const adapter = initialAdapter ?? findAdapter(fetched.url);
+  const adapterSourceUrl = initialAdapter ? initialUrl : fetched.url;
+  const preview = applyAdapter(parseProductHtml(fetched.html, fetched.url), fetched.html, fetched.url, adapter, adapterSourceUrl);
+  return applyRemoteAdapter(preview, fetched.html, fetched.url, adapter, adapterSourceUrl);
 }
 
 export function parseProductHtmlWithAdapters(html: string, url: URL) {
-  return applyAdapter(parseProductHtml(html, url), html, url);
+  return applyAdapter(parseProductHtml(html, url), html, url, findAdapter(url), url);
 }
 
 export async function validatePublicProductUrl(rawUrl: string) {
@@ -57,10 +93,10 @@ export async function validatePublicProductUrl(rawUrl: string) {
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new ProductUrlImportError("invalid-url");
+    throw new ProductUrlImportError("invalid-url", { stage: "url-validation" });
   }
-  if (!["http:", "https:"].includes(url.protocol)) throw new ProductUrlImportError("invalid-url");
-  if (!url.hostname || isBlockedHostname(url.hostname)) throw new ProductUrlImportError("blocked-url");
+  if (!["http:", "https:"].includes(url.protocol)) throw new ProductUrlImportError("invalid-url", { stage: "url-validation", hostname: url.hostname || undefined });
+  if (!url.hostname || isBlockedHostname(url.hostname)) throw new ProductUrlImportError("blocked-url", { stage: "url-validation", hostname: url.hostname || undefined });
   await assertPublicHost(url.hostname);
   return url;
 }
@@ -176,10 +212,9 @@ function extractFallbackProduct(html: string, url: URL): Partial<ProductUrlImpor
   };
 }
 
-function applyAdapter(preview: ProductUrlImportPreview, html: string, url: URL) {
-  const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
+function applyAdapter(preview: ProductUrlImportPreview, html: string, url: URL, adapter = findAdapter(url), sourceUrl = url) {
   if (!adapter) return preview;
-  const enhanced = adapter.enhance({ html, url, preview });
+  const enhanced = adapter.enhance({ html, url, sourceUrl, preview });
   return sanitizePreview({
     ...enhanced,
     extraction: {
@@ -192,10 +227,22 @@ function applyAdapter(preview: ProductUrlImportPreview, html: string, url: URL) 
   });
 }
 
-async function applyRemoteAdapter(preview: ProductUrlImportPreview, html: string, url: URL) {
-  const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
+async function applyRemoteAdapter(preview: ProductUrlImportPreview, html: string, url: URL, adapter = findAdapter(url), sourceUrl = url) {
   if (!adapter?.enhanceRemote) return preview;
-  const enhanced = await adapter.enhanceRemote({ html, url, preview, fetchHtml, fetchJson });
+  let enhanced: ProductUrlImportPreview | null;
+  try {
+    enhanced = await adapter.enhanceRemote({ html, url, sourceUrl, preview, fetchHtml, fetchJson });
+  } catch (error) {
+    logImportStageFailure("public-json-fetch", adapter, sourceUrl, error);
+    return preview;
+  }
+  if (!enhanced) {
+    logImportStageFailure("public-json-normalization", adapter, sourceUrl, new ProductUrlImportError("invalid-response", {
+      stage: "public-json-normalization",
+      hostname: sourceUrl.hostname,
+    }));
+    return preview;
+  }
   return sanitizePreview({
     ...enhanced,
     extraction: {
@@ -208,11 +255,23 @@ async function applyRemoteAdapter(preview: ProductUrlImportPreview, html: string
   });
 }
 
-async function fetchPreviewWithDirectAdapter(url: URL) {
-  const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
+async function fetchPreviewWithDirectAdapter(url: URL, adapter = findAdapter(url)) {
   if (!adapter?.fetchPreview) return null;
   const preview = await adapter.fetchPreview({ url, fetchJson });
   return preview ? sanitizePreview(preview) : null;
+}
+
+function findAdapter(url: URL) {
+  return adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
+}
+
+function logImportStageFailure(stage: ProductUrlImportStage, adapter: ProductImportAdapter | undefined, sourceUrl: URL, error: unknown) {
+  console.warn("[Product URL preview] import stage failed", {
+    stage,
+    adapter: adapter?.id ?? "none",
+    sourceHostname: sourceUrl.hostname,
+    ...safeProductUrlImportError(error),
+  });
 }
 
 function mergePreview(base: ProductUrlImportPreview, ...parts: Array<Partial<ProductUrlImportPreview>>) {
@@ -255,6 +314,7 @@ async function fetchHtml(initialUrl: URL) {
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
       const response = await fetch(url, {
+        cache: "no-store",
         redirect: "manual",
         signal: controller.signal,
         headers: {
@@ -268,15 +328,15 @@ async function fetchHtml(initialUrl: URL) {
         url = await validatePublicProductUrl(new URL(location, url).toString());
         continue;
       }
-      if (!response.ok) throw new ProductUrlImportError("fetch-failed");
+      if (!response.ok) throw new ProductUrlImportError("fetch-failed", { stage: "html-fetch", hostname: url.hostname, upstreamStatus: response.status });
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType && !/html|text\/plain|application\/xhtml\+xml/i.test(contentType)) {
-        throw new ProductUrlImportError("invalid-response");
+        throw new ProductUrlImportError("invalid-response", { stage: "html-fetch", hostname: url.hostname, upstreamStatus: response.status });
       }
       return { url, html: await readLimitedText(response) };
     } catch (error) {
       if (error instanceof ProductUrlImportError) throw error;
-      throw new ProductUrlImportError("fetch-failed");
+      throw new ProductUrlImportError("fetch-failed", { stage: "html-fetch", hostname: url.hostname });
     } finally {
       clearTimeout(timeout);
     }
@@ -289,7 +349,7 @@ async function fetchJson(initialUrl: URL) {
   try {
     return { url: fetched.url, json: JSON.parse(fetched.text) as unknown };
   } catch {
-    throw new ProductUrlImportError("invalid-response");
+    throw new ProductUrlImportError("invalid-response", { stage: "public-json-parse", hostname: fetched.url.hostname });
   }
 }
 
@@ -301,6 +361,7 @@ async function fetchText(initialUrl: URL, accept: string) {
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
       const response = await fetch(url, {
+        cache: "no-store",
         redirect: "manual",
         signal: controller.signal,
         headers: {
@@ -314,11 +375,11 @@ async function fetchText(initialUrl: URL, accept: string) {
         url = await validatePublicProductUrl(new URL(location, url).toString());
         continue;
       }
-      if (!response.ok) throw new ProductUrlImportError("fetch-failed");
+      if (!response.ok) throw new ProductUrlImportError("fetch-failed", { stage: "public-json-fetch", hostname: url.hostname, upstreamStatus: response.status });
       return { url, text: await readLimitedText(response) };
     } catch (error) {
       if (error instanceof ProductUrlImportError) throw error;
-      throw new ProductUrlImportError("fetch-failed");
+      throw new ProductUrlImportError("fetch-failed", { stage: "public-json-fetch", hostname: url.hostname });
     } finally {
       clearTimeout(timeout);
     }

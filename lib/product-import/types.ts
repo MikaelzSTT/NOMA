@@ -45,6 +45,7 @@ export interface ProductUrlImportPreview {
 export interface ProductImportAdapterContext {
   html: string;
   url: URL;
+  sourceUrl?: URL;
   preview: ProductUrlImportPreview;
 }
 
@@ -63,5 +64,5 @@ export interface ProductImportAdapter {
   domains: string[];
   enhance(context: ProductImportAdapterContext): ProductUrlImportPreview;
   fetchPreview?(context: ProductImportAdapterDirectContext): Promise<ProductUrlImportPreview | null>;
-  enhanceRemote?(context: ProductImportAdapterRemoteContext): Promise<ProductUrlImportPreview>;
+  enhanceRemote?(context: ProductImportAdapterRemoteContext): Promise<ProductUrlImportPreview | null>;
 }

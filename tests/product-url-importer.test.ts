@@ -14,7 +14,7 @@ const baseUrl = new URL("https://loja.example/produto/sofa");
 describe("importação de produto por URL", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("extrai Product em JSON-LD com preço e variantes", () => {
@@ -308,7 +308,7 @@ describe("importação de produto por URL", () => {
 
     const preview = await sleepHouseAdapter.fetchPreview?.({ url, fetchJson });
 
-    expect(fetchJson).toHaveBeenCalledWith(new URL("https://www.sleephouse.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"));
+    expect(fetchJson).toHaveBeenCalledWith(new URL("https://sleephouse.vtexcommercestable.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"));
     expect(preview).toMatchObject({
       title: "Colchão Pikolin - Drift Adjustable - 34 cm",
       brand: "Pikolin",
@@ -328,6 +328,94 @@ describe("importação de produto por URL", () => {
       expect.objectContaining({ label: "Solteiro Americano | 0,96 x 2,03 m", sku: "93926", sourcePrice: 9026.1, compareAtPrice: 11571.93, attributes: { tamanhos: "Solteiro Americano - 0,96 x 2,03 M" } }),
       expect.objectContaining({ label: "Queen Size | 1,58 x 1,98 m", sku: "93928", sourcePrice: 13738.94, compareAtPrice: 17614.04, attributes: { tamanhos: "Queen Size - 1,58 X 1,98 M" } }),
     ]);
+  });
+
+  it("executa o fallback VTEX após o redirect da URL antiga terminar em 404", async () => {
+    const sourceUrl = "https://www.sleephouse.com.br/colchao-drift-adjustable-34-cm-pikolin-096-x-203-m-pk0204_1061/p?idSku=93926";
+    const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
+      const url = input instanceof URL ? input : new URL(String(input));
+      if (url.hostname === "sleephouse.vtexcommercestable.com.br") {
+        return Response.json(sleepHouseVtexProduct());
+      }
+      if (url.pathname === "/Sistema/404") {
+        return new Response("<html><title>Sistema - Sleep House</title></html>", { status: 404, headers: { "content-type": "text/html" } });
+      }
+      return new Response(null, {
+        status: 301,
+        headers: { location: "/Sistema/404?ProductLinkNotFound=colchao-drift-adjustable-34-cm-pikolin-096-x-203-m-pk0204_1061" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const preview = await previewProductFromUrl(sourceUrl);
+
+    expect(preview).toMatchObject({
+      title: "Colchão Pikolin - Drift Adjustable - 34 cm",
+      sourceUrl,
+      extraction: { adapter: "sleep-house" },
+    });
+    expect(preview.images).toHaveLength(2);
+    expect(preview.variants).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[0]).toEqual(new URL("https://sleephouse.vtexcommercestable.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"));
+    expect(warn).toHaveBeenCalledWith("[Product URL preview] import stage failed", expect.objectContaining({
+      stage: "html-fetch",
+      adapter: "sleep-house",
+      sourceHostname: "www.sleephouse.com.br",
+      upstreamStatus: 404,
+    }));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("93926");
+  });
+
+  it("preserva idSku para o adapter remoto quando um redirect remove a query string", async () => {
+    const sourceUrl = "https://www.sleephouse.com.br/slug-antigo/p?idSku=93926";
+    const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
+      const url = input instanceof URL ? input : new URL(String(input));
+      if (url.hostname === "sleephouse.vtexcommercestable.com.br") {
+        return Response.json(sleepHouseVtexProduct());
+      }
+      if (url.pathname === "/pagina-redirecionada") {
+        return new Response("<html><title>Página redirecionada</title></html>", { status: 200, headers: { "content-type": "text/html" } });
+      }
+      return new Response(null, { status: 301, headers: { location: "/pagina-redirecionada" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const preview = await previewProductFromUrl(sourceUrl);
+
+    expect(preview.title).toBe("Colchão Pikolin - Drift Adjustable - 34 cm");
+    expect(preview.variants[0]?.sku).toBe("93926");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[0]).toEqual(new URL("https://sleephouse.vtexcommercestable.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"));
+  });
+
+  it("registra o status upstream quando o fallback público da Sleep House falha", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
+      const url = input instanceof URL ? input : new URL(String(input));
+      if (url.hostname === "sleephouse.vtexcommercestable.com.br") {
+        return new Response("indisponível", { status: 503 });
+      }
+      return new Response("", { status: 404, headers: { "content-type": "text/html" } });
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await expect(previewProductFromUrl("https://www.sleephouse.com.br/produto/p?idSku=93926")).rejects.toMatchObject({
+      code: "fetch-failed",
+      details: {
+        stage: "public-json-fetch",
+        hostname: "sleephouse.vtexcommercestable.com.br",
+        upstreamStatus: 503,
+      },
+    });
+    expect(warn).toHaveBeenCalledWith("[Product URL preview] import stage failed", expect.objectContaining({
+      stage: "public-json-fetch",
+      adapter: "sleep-house",
+      sourceHostname: "www.sleephouse.com.br",
+      hostname: "sleephouse.vtexcommercestable.com.br",
+      upstreamStatus: 503,
+    }));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("93926");
   });
 
   it("extrai Sleep House do skuJson da página canônica sem depender da API", () => {
@@ -369,7 +457,16 @@ describe("importação de produto por URL", () => {
       return new Response("", { status: 404, headers: { "content-type": "text/html" } });
     }));
 
-    await expect(previewProductFromUrl("https://www.sleephouse.com.br/produto-inexistente/p?idSku=00000")).rejects.toMatchObject({ code: "fetch-failed" });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await expect(previewProductFromUrl("https://www.sleephouse.com.br/produto-inexistente/p?idSku=00000")).rejects.toMatchObject({
+      code: "invalid-response",
+      details: { stage: "public-json-normalization" },
+    });
+    expect(warn).toHaveBeenCalledWith("[Product URL preview] import stage failed", expect.objectContaining({
+      stage: "public-json-normalization",
+      adapter: "sleep-house",
+    }));
   });
 });
 

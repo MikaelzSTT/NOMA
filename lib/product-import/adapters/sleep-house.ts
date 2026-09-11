@@ -2,36 +2,35 @@ import { absoluteUrl, compactText, extractTags, jsonFromScriptAssignments } from
 import type { ImportedAvailability, ImportedProductImage, ImportedProductVariant, ProductImportAdapter, ProductUrlImportPreview } from "@/lib/product-import/types";
 
 const SLEEP_HOUSE_DOMAINS = ["www.sleephouse.com.br", "sleephouse.com.br"];
+const SLEEP_HOUSE_PUBLIC_API_ORIGIN = "https://sleephouse.vtexcommercestable.com.br";
 
 export const sleepHouseAdapter: ProductImportAdapter = {
   id: "sleep-house",
   domains: SLEEP_HOUSE_DOMAINS,
-  enhance({ html, url, preview }) {
+  enhance({ html, url, sourceUrl, preview }) {
     const skuJson = sleepHouseSkuJsonFromHtml(html);
     if (!skuJson) return preview;
-    return previewFromSkuJson(skuJson, url, preview, {
+    const requestedUrl = sourceUrl ?? url;
+    return previewFromSkuJson(skuJson, requestedUrl, preview, {
       description: descriptionFromHtml(html) ?? preview.description,
       category: categoryFromVtexEvents(html) ?? preview.category,
-      canonicalUrl: preview.canonicalUrl ?? url.toString(),
+      canonicalUrl: preview.canonicalUrl ?? requestedUrl.toString(),
     });
   },
   async fetchPreview({ url, fetchJson }) {
     const idSku = selectedSkuFromUrl(url);
     if (!idSku) return null;
-    const apiUrl = sleepHouseSkuApiUrl(url, idSku);
+    const apiUrl = sleepHouseSkuApiUrl(idSku);
     const { json } = await fetchJson(apiUrl);
     return previewFromVtexSearch(json, url);
   },
-  async enhanceRemote({ url, preview, fetchJson }) {
-    const idSku = selectedSkuFromUrl(url);
+  async enhanceRemote({ url, sourceUrl, preview, fetchJson }) {
+    const requestedUrl = sourceUrl ?? url;
+    const idSku = selectedSkuFromUrl(requestedUrl);
     if (!idSku) return preview;
-    try {
-      const apiUrl = sleepHouseSkuApiUrl(url, idSku);
-      const { json } = await fetchJson(apiUrl);
-      return previewFromVtexSearch(json, url) ?? preview;
-    } catch {
-      return preview;
-    }
+    const apiUrl = sleepHouseSkuApiUrl(idSku);
+    const { json } = await fetchJson(apiUrl);
+    return previewFromVtexSearch(json, requestedUrl);
   },
 };
 
@@ -137,8 +136,8 @@ function variantFromVtexItem(product: Record<string, unknown>, item: Record<stri
   };
 }
 
-function sleepHouseSkuApiUrl(baseUrl: URL, sku: string) {
-  const url = new URL("/api/catalog_system/pub/products/search", baseUrl.origin);
+function sleepHouseSkuApiUrl(sku: string) {
+  const url = new URL("/api/catalog_system/pub/products/search", SLEEP_HOUSE_PUBLIC_API_ORIGIN);
   url.searchParams.set("fq", `skuId:${sku}`);
   return url;
 }
