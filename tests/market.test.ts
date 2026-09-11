@@ -37,6 +37,8 @@ import { resolveMarketRedirect } from "@/proxy";
 describe("mercados públicos", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mocks.brOffer, offerRow("BR", "sofa-arco", "BRL", 8940));
+    Object.assign(mocks.usOffer, offerRow("US", "sofa-arch", "USD", 1890, "Arch Sofa"));
     mocks.brOffer.supplier.shippingStrategy = "FIXED";
   });
 
@@ -77,6 +79,42 @@ describe("mercados públicos", () => {
     const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
 
     expect(product?.estimatedDelivery).toBeNull();
+  });
+
+  it("prioriza imagens próprias e não injeta imagem antiga da variante na galeria pública", async () => {
+    Object.assign(mocks.brOffer.product, { images: [
+      { id: "own-1", url: "https://blob.vercel-storage.com/produto-1.jpg", alt: "Produto 1", position: 0, isPrimary: true },
+      { id: "own-2", url: "https://blob.vercel-storage.com/produto-2.jpg", alt: "Produto 2", position: 1, isPrimary: false },
+    ] });
+    Object.assign(mocks.brOffer.variants[0]!, { imageUrl: "https://fornecedor.example.com/imagem-antiga.jpg" });
+
+    const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(product?.images.map((image) => image.url)).toEqual([
+      "https://blob.vercel-storage.com/produto-1.jpg",
+      "https://blob.vercel-storage.com/produto-2.jpg",
+    ]);
+  });
+
+  it("usa imagem de variante como fallback quando não há galeria própria", async () => {
+    Object.assign(mocks.brOffer.product, { images: [] });
+    mocks.brOffer.images = null;
+    Object.assign(mocks.brOffer.variants[0]!, { imageUrl: "https://fornecedor.example.com/fallback-variante.jpg" });
+
+    const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(product?.images.map((image) => image.url)).toEqual(["https://fornecedor.example.com/fallback-variante.jpg"]);
+  });
+
+  it("remove URLs duplicadas ao compor imagens públicas", async () => {
+    Object.assign(mocks.brOffer, { images: [
+      { url: "https://cdn.example.com/produto.jpg", alt: "Produto", position: 0, isPrimary: true },
+      { url: "https://cdn.example.com/produto.jpg", alt: "Duplicada", position: 1, isPrimary: false },
+    ] });
+
+    const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(product?.images.map((image) => image.url)).toEqual(["https://cdn.example.com/produto.jpg"]);
   });
 
   it("preferência manual em cookie vence detecção automática", () => {

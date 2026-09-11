@@ -3,13 +3,16 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { ImageIcon } from "lucide-react";
-import { imagesWithFeaturedVariant } from "@/lib/product-gallery-images";
+import { imageDedupeKey, imagesWithFeaturedVariant } from "@/lib/product-gallery-images";
 import styles from "./product-detail.module.css";
 
 export function ProductGallery({ images, name, sprite, featuredImageUrl }: { images: Array<{ id: string; url: string; alt: string | null }>; name: string; sprite?: { column: number; row: number }; featuredImageUrl?: string | null }) {
-  const [selected, setSelected] = useState(0);
+  const [selection, setSelection] = useState<{ key: string; featuredKey: string | null } | null>(null);
   const visibleImages = useMemo(() => imagesWithFeaturedVariant(images, name, featuredImageUrl), [featuredImageUrl, images, name]);
-  const current = visibleImages[selected];
+  const featuredKey = featuredImageUrl ? imageDedupeKey(featuredImageUrl) || null : null;
+  const selectedKey = selection?.featuredKey === featuredKey ? selection.key : featuredKey;
+  const selectedIndex = Math.max(0, visibleImages.findIndex((image) => imageDedupeKey(image.url) === selectedKey));
+  const current = visibleImages[selectedIndex];
 
   return (
     <div className={styles.gallery}>
@@ -25,7 +28,7 @@ export function ProductGallery({ images, name, sprite, featuredImageUrl }: { ima
       {visibleImages.length > 1 && (
         <div className={styles.thumbnails}>
           {visibleImages.map((image, index) => (
-            <button key={image.id} type="button" onClick={() => setSelected(index)} className={styles.thumbnail} data-active={selected === index} aria-label={`Ver imagem ${index + 1}`}>
+            <button key={image.id} type="button" onClick={() => setSelection({ key: imageDedupeKey(image.url), featuredKey })} className={styles.thumbnail} data-active={selectedIndex === index} aria-label={`Ver imagem ${index + 1}`}>
               <Image src={image.url} alt="" fill sizes="64px" className="object-cover" />
             </button>
           ))}

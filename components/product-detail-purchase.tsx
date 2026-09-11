@@ -58,6 +58,7 @@ export function ProductDetailPurchase({
   const router = useRouter();
   const defaultVariant = useMemo(() => variants.find((variant) => variant.isDefault) ?? variants[0], [variants]);
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant);
+  const [variantImageSelected, setVariantImageSelected] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [isShippingLoading, setIsShippingLoading] = useState(false);
   const [postalCode, setPostalCode] = useState("");
@@ -93,7 +94,7 @@ export function ProductDetailPurchase({
       data-noma-product-slug={productSlug}
       data-noma-selected-variant-id={selectedVariantId ?? undefined}
     >
-      <ProductGallery key={selectedVariant?.imageUrl ?? "general-gallery"} images={images} name={name} sprite={sprite} featuredImageUrl={selectedVariant?.imageUrl} />
+      <ProductGallery images={images} name={name} sprite={sprite} featuredImageUrl={variantImageSelected ? selectedVariant?.imageUrl : null} />
       <div className={styles.summary}>
         <p className={styles.brand}>{brandLabel}</p>
         <h1 className={styles.title}>{name}</h1>
@@ -271,6 +272,7 @@ export function ProductDetailPurchase({
 
   function handleSelectVariant(variant: CatalogProductVariant) {
     setSelectedVariant(variant);
+    setVariantImageSelected(true);
     setShippingQuotes([]);
     setSelectedQuoteId(null);
     setShippingMessage(null);

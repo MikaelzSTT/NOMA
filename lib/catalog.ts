@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { Market } from "@/lib/market";
+import { imageDedupeKey } from "@/lib/product-gallery-images";
 import type { ProductFilters } from "@/lib/validation/product";
 
 const offerSelect = {
@@ -54,7 +55,7 @@ const offerSelect = {
       brandId: true,
       category: { select: { id: true, name: true, slug: true } },
       brand: { select: { id: true, name: true, slug: true } },
-      images: { select: { id: true, url: true, alt: true, position: true }, orderBy: { position: "asc" as const } },
+      images: { select: { id: true, url: true, alt: true, position: true, isPrimary: true }, orderBy: [{ isPrimary: "desc" as const }, { position: "asc" as const }] },
       variants: {
         where: { active: true },
         select: { id: true, sku: true, title: true, options: true, sellingPrice: true, stock: true },
@@ -281,7 +282,7 @@ export async function getSearchSuggestions(query: string, market: Market) {
     slug: offer.slug,
     sellingPrice: offer.sellingPrice ? Number(offer.sellingPrice) : null,
     currency: offer.currency,
-    images: offerImages(offer.images, offer.product.images),
+    images: composePublicProductImages({ offerImages: offer.images, productImages: offer.product.images }),
   }));
 }
 
@@ -316,7 +317,11 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     isDefault: variant.isDefault,
   }));
   const defaultOfferVariant = offerVariants.find((variant) => variant.isDefault) ?? offerVariants[0];
-  const images = offerImages(offer.images, product.images.map((image) => ({ id: image.id, url: image.url, alt: image.alt, position: image.position })));
+  const images = composePublicProductImages({
+    offerImages: offer.images,
+    productImages: product.images.map((image) => ({ id: image.id, url: image.url, alt: image.alt, position: image.position, isPrimary: image.isPrimary })),
+    variantImages: offerVariants,
+  });
   const sellingPrice = defaultOfferVariant?.salePrice ?? (offer.sellingPrice == null ? null : Number(offer.sellingPrice));
   const compareAtPrice = defaultOfferVariant ? defaultOfferVariant.compareAtPrice : offer.compareAtPrice == null ? null : Number(offer.compareAtPrice);
   return {
@@ -366,17 +371,71 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
   };
 }
 
-function offerImages(value: unknown, fallback: Array<{ id?: string; url: string; alt?: string | null; position?: number }>) {
+type PublicImageInput = { id?: string; url: string; alt?: string | null; position?: number | null; isPrimary?: boolean | null };
+type PublicVariantImageInput = { id: string; label: string; imageUrl: string | null; isDefault?: boolean; position?: number };
+
+export function composePublicProductImages({
+  offerImages: offerImageValue,
+  productImages,
+  variantImages = [],
+}: {
+  offerImages: unknown;
+  productImages: PublicImageInput[];
+  variantImages?: PublicVariantImageInput[];
+}) {
+  const offerGallery = offerImages(offerImageValue);
+  const productGallery = normalizePublicImages(productImages, "image");
+  const gallery = offerGallery.length ? offerGallery : productGallery;
+  if (gallery.length) return gallery;
+
+  return dedupePublicImages(
+    [...variantImages]
+      .sort((left, right) => Number(Boolean(right.isDefault)) - Number(Boolean(left.isDefault)) || (left.position ?? 0) - (right.position ?? 0))
+      .flatMap((variant, position) => {
+        const url = variant.imageUrl?.trim();
+        if (!url) return [];
+        return [{ id: `variant-image-${variant.id}`, url, alt: variant.label, position }];
+      }),
+  );
+}
+
+function offerImages(value: unknown) {
   if (Array.isArray(value)) {
-    const images = value.flatMap((item, position) => {
+    const images = value.flatMap((item, index) => {
       if (!item || typeof item !== "object" || Array.isArray(item)) return [];
       const url = "url" in item ? String(item.url ?? "") : "";
       if (!url) return [];
-      return [{ id: `offer-image-${position}`, url, alt: "alt" in item ? String(item.alt ?? "") || null : null, position }];
+      const position = "position" in item && typeof item.position === "number" ? item.position : index;
+      const isPrimary = "isPrimary" in item && typeof item.isPrimary === "boolean" ? item.isPrimary : false;
+      return [{ id: `offer-image-${index}`, url, alt: "alt" in item ? String(item.alt ?? "") || null : null, position, isPrimary }];
     });
-    if (images.length) return images;
+    return dedupePublicImages(sortPublicImages(images));
   }
-  return fallback.map((image, position) => ({ id: image.id ?? `image-${position}`, url: image.url, alt: image.alt ?? null, position: image.position ?? position }));
+  return [];
+}
+
+function normalizePublicImages(images: PublicImageInput[], idPrefix: string) {
+  return dedupePublicImages(sortPublicImages(images.map((image, position) => ({
+    id: image.id ?? `${idPrefix}-${position}`,
+    url: image.url,
+    alt: image.alt ?? null,
+    position: image.position ?? position,
+    isPrimary: image.isPrimary ?? false,
+  }))));
+}
+
+function sortPublicImages<T extends { position: number; isPrimary?: boolean }>(images: T[]) {
+  return [...images].sort((left, right) => Number(Boolean(right.isPrimary)) - Number(Boolean(left.isPrimary)) || left.position - right.position);
+}
+
+function dedupePublicImages(images: Array<{ id: string; url: string; alt: string | null; position: number }>) {
+  const seen = new Set<string>();
+  return images.flatMap((image, position) => {
+    const key = imageDedupeKey(image.url);
+    if (!key || seen.has(key)) return [];
+    seen.add(key);
+    return [{ id: image.id, url: image.url.trim(), alt: image.alt, position }];
+  });
 }
 
 function publicAttributes(value: unknown) {

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRight, Heart, ShieldCheck, Truck } from "lucide-react";
 import type { CatalogProduct } from "@/lib/catalog";
 import { MARKET_CONFIG, productPath, type Market } from "@/lib/market";
 import { formatMoney } from "@/lib/utils";
@@ -12,6 +12,10 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
   const isUS = market === "US";
   const discountLabel = getDiscountLabel(product.sellingPrice, product.compareAtPrice, product.discountPercent);
   const badge = product.attributes.badge ? String(product.attributes.badge) : null;
+  const savings = product.sellingPrice && product.compareAtPrice && product.compareAtPrice > product.sellingPrice
+    ? product.compareAtPrice - product.sellingPrice
+    : null;
+  const href = productPath(market, product.slug);
 
   return (
     <article
@@ -19,7 +23,7 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
       data-reveal
       style={{ transitionDelay: `${Math.min(index * 45, 180)}ms` }}
     >
-      <Link href={productPath(market, product.slug)} aria-label={`${isUS ? "View" : "Ver"} ${product.title}`}>
+      <Link className={styles.storeProductLink} href={href} aria-label={`${isUS ? "View" : "Ver"} ${product.title}`}>
         <div
           className={styles.storeProductImage}
           role="img"
@@ -33,8 +37,12 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
             } as CSSProperties
           }
         >
-          {discountLabel && <span className={styles.storeDiscount}>{discountLabel}</span>}
-          {badge && <span className={styles.storeBadge}>{badge}</span>}
+          {(discountLabel || badge) && (
+            <div className={styles.storeImageBadges}>
+              {discountLabel && <span className={styles.storeDiscount}>{discountLabel}</span>}
+              {badge && <span className={styles.storeBadge}>{badge}</span>}
+            </div>
+          )}
         </div>
         <div className={styles.storeProductBody}>
           <p className={styles.storeCategory}>{product.category.name}</p>
@@ -49,12 +57,41 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
               <span>{formatMoney(product.compareAtPrice, product.currency, config.locale)}</span>
             )}
           </div>
-          {product.estimatedDelivery && <p className={styles.storeDelivery}>{product.estimatedDelivery}</p>}
-          <span className={styles.storeCardCta}>
-            {isUS ? "View product" : "Ver produto"} <ArrowUpRight aria-hidden="true" size={14} />
+          {savings && (
+            <span className={styles.storeSavings}>
+              {isUS ? "Save" : "Economize"} {formatMoney(savings, product.currency, config.locale)}
+            </span>
+          )}
+          <ul className={styles.storeBenefits} aria-label={isUS ? "Purchase benefits" : "Benefícios da compra"}>
+            <li>
+              <Truck aria-hidden="true" />
+              <span>
+                {isUS ? "Shipping across the United States" : "Frete para todo o Brasil"}
+                {product.estimatedDelivery && <small className={styles.storeDelivery}>{product.estimatedDelivery}</small>}
+              </span>
+            </li>
+            <li>
+              <ShieldCheck aria-hidden="true" />
+              <span>{isUS ? "Secure checkout" : "Compra segura"}</span>
+            </li>
+          </ul>
+          <span className={styles.storeCardActions}>
+            <span className={styles.storeCardCta}>
+              {isUS ? "View product" : "Ver produto"} <ArrowRight aria-hidden="true" />
+            </span>
+            <span className={styles.storeFavoriteSpace} aria-hidden="true" />
           </span>
         </div>
       </Link>
+      <button
+        className={styles.storeFavoriteButton}
+        type="button"
+        disabled
+        aria-label={isUS ? "Favorites coming soon" : "Favoritos em breve"}
+        title={isUS ? "Favorites coming soon" : "Favoritos em breve"}
+      >
+        <Heart aria-hidden="true" />
+      </button>
     </article>
   );
 }
