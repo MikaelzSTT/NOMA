@@ -50,11 +50,18 @@ export interface ProductImportAdapterContext {
 
 export interface ProductImportAdapterRemoteContext extends ProductImportAdapterContext {
   fetchHtml: (url: URL) => Promise<{ url: URL; html: string }>;
+  fetchJson: (url: URL) => Promise<{ url: URL; json: unknown }>;
+}
+
+export interface ProductImportAdapterDirectContext {
+  url: URL;
+  fetchJson: (url: URL) => Promise<{ url: URL; json: unknown }>;
 }
 
 export interface ProductImportAdapter {
   id: string;
   domains: string[];
   enhance(context: ProductImportAdapterContext): ProductUrlImportPreview;
+  fetchPreview?(context: ProductImportAdapterDirectContext): Promise<ProductUrlImportPreview | null>;
   enhanceRemote?(context: ProductImportAdapterRemoteContext): Promise<ProductUrlImportPreview>;
 }

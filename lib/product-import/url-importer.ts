@@ -2,6 +2,7 @@ import "server-only";
 import dns from "node:dns/promises";
 import net from "node:net";
 import { colchoesAcordeBemAdapter } from "@/lib/product-import/adapters/colchoes-acorde-bem";
+import { sleepHouseAdapter } from "@/lib/product-import/adapters/sleep-house";
 import {
   absoluteUrl,
   compactText,
@@ -25,7 +26,7 @@ import type {
 const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 6_000;
 const MAX_RESPONSE_BYTES = 2_000_000;
-const adapters: ProductImportAdapter[] = [colchoesAcordeBemAdapter];
+const adapters: ProductImportAdapter[] = [colchoesAcordeBemAdapter, sleepHouseAdapter];
 
 export class ProductUrlImportError extends Error {
   constructor(readonly code: "invalid-url" | "blocked-url" | "fetch-failed" | "invalid-response") {
@@ -35,7 +36,14 @@ export class ProductUrlImportError extends Error {
 
 export async function previewProductFromUrl(rawUrl: string): Promise<ProductUrlImportPreview> {
   const initialUrl = await validatePublicProductUrl(rawUrl);
-  const fetched = await fetchHtml(initialUrl);
+  let fetched: { url: URL; html: string };
+  try {
+    fetched = await fetchHtml(initialUrl);
+  } catch (error) {
+    const preview = await fetchPreviewWithDirectAdapter(initialUrl);
+    if (preview) return preview;
+    throw error;
+  }
   const preview = parseProductHtmlWithAdapters(fetched.html, fetched.url);
   return applyRemoteAdapter(preview, fetched.html, fetched.url);
 }
@@ -187,7 +195,7 @@ function applyAdapter(preview: ProductUrlImportPreview, html: string, url: URL) 
 async function applyRemoteAdapter(preview: ProductUrlImportPreview, html: string, url: URL) {
   const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
   if (!adapter?.enhanceRemote) return preview;
-  const enhanced = await adapter.enhanceRemote({ html, url, preview, fetchHtml });
+  const enhanced = await adapter.enhanceRemote({ html, url, preview, fetchHtml, fetchJson });
   return sanitizePreview({
     ...enhanced,
     extraction: {
@@ -198,6 +206,13 @@ async function applyRemoteAdapter(preview: ProductUrlImportPreview, html: string
     images: dedupeImages(enhanced.images, enhanced.title),
     variants: dedupeVariants(enhanced.variants, enhanced.sourcePrice, enhanced.compareAtPrice, enhanced.currency, enhanced.availability, enhanced.canonicalUrl ?? enhanced.sourceUrl),
   });
+}
+
+async function fetchPreviewWithDirectAdapter(url: URL) {
+  const adapter = adapters.find((item) => item.domains.includes(url.hostname.toLowerCase()));
+  if (!adapter?.fetchPreview) return null;
+  const preview = await adapter.fetchPreview({ url, fetchJson });
+  return preview ? sanitizePreview(preview) : null;
 }
 
 function mergePreview(base: ProductUrlImportPreview, ...parts: Array<Partial<ProductUrlImportPreview>>) {
@@ -259,6 +274,48 @@ async function fetchHtml(initialUrl: URL) {
         throw new ProductUrlImportError("invalid-response");
       }
       return { url, html: await readLimitedText(response) };
+    } catch (error) {
+      if (error instanceof ProductUrlImportError) throw error;
+      throw new ProductUrlImportError("fetch-failed");
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new ProductUrlImportError("blocked-url");
+}
+
+async function fetchJson(initialUrl: URL) {
+  const fetched = await fetchText(initialUrl, "application/json,text/plain;q=0.8,*/*;q=0.5");
+  try {
+    return { url: fetched.url, json: JSON.parse(fetched.text) as unknown };
+  } catch {
+    throw new ProductUrlImportError("invalid-response");
+  }
+}
+
+async function fetchText(initialUrl: URL, accept: string) {
+  let url = initialUrl;
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    await validatePublicProductUrl(url.toString());
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          accept,
+          "user-agent": "NOMA product URL preview/1.0",
+        },
+      });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        if (!location) throw new ProductUrlImportError("invalid-response");
+        url = await validatePublicProductUrl(new URL(location, url).toString());
+        continue;
+      }
+      if (!response.ok) throw new ProductUrlImportError("fetch-failed");
+      return { url, text: await readLimitedText(response) };
     } catch (error) {
       if (error instanceof ProductUrlImportError) throw error;
       throw new ProductUrlImportError("fetch-failed");

@@ -1,10 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { colchoesAcordeBemAdapter } from "@/lib/product-import/adapters/colchoes-acorde-bem";
-import { parseProductHtmlWithAdapters, validatePublicProductUrl } from "@/lib/product-import/url-importer";
+import { sleepHouseAdapter } from "@/lib/product-import/adapters/sleep-house";
+import { parseProductHtmlWithAdapters, previewProductFromUrl, validatePublicProductUrl } from "@/lib/product-import/url-importer";
+
+vi.mock("node:dns/promises", () => ({
+  default: {
+    lookup: vi.fn(async () => [{ address: "203.0.113.10" }]),
+  },
+}));
 
 const baseUrl = new URL("https://loja.example/produto/sofa");
 
 describe("importação de produto por URL", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
   it("extrai Product em JSON-LD com preço e variantes", () => {
     const preview = parseProductHtmlWithAdapters(`
       <script type="application/ld+json">
@@ -260,8 +272,9 @@ describe("importação de produto por URL", () => {
       `,
     };
     const fetchHtml = vi.fn(async (variantUrl: URL) => ({ url: variantUrl, html: variantPages[variantUrl.searchParams.get("variant_id") ?? ""] ?? "" }));
+    const fetchJson = vi.fn(async (jsonUrl: URL) => ({ url: jsonUrl, json: {} }));
 
-    const enhanced = await colchoesAcordeBemAdapter.enhanceRemote?.({ html, url, preview, fetchHtml });
+    const enhanced = await colchoesAcordeBemAdapter.enhanceRemote?.({ html, url, preview, fetchHtml, fetchJson });
 
     expect(fetchHtml).toHaveBeenCalledTimes(2);
     expect(enhanced?.variants).toHaveLength(2);
@@ -288,4 +301,104 @@ describe("importação de produto por URL", () => {
       "https://images.tcdn.com.br/img/img_prod/573513/vegas_queen_1417_7267.jpg",
     ]);
   });
+
+  it("extrai Sleep House a partir do JSON público da VTEX quando a URL possui idSku", async () => {
+    const url = new URL("https://www.sleephouse.com.br/slug-antigo/p?idSku=93926");
+    const fetchJson = vi.fn(async (apiUrl: URL) => ({ url: apiUrl, json: sleepHouseVtexProduct() }));
+
+    const preview = await sleepHouseAdapter.fetchPreview?.({ url, fetchJson });
+
+    expect(fetchJson).toHaveBeenCalledWith(new URL("https://www.sleephouse.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"));
+    expect(preview).toMatchObject({
+      title: "Colchão Pikolin - Drift Adjustable - 34 cm",
+      brand: "Pikolin",
+      category: "Colchão",
+      sku: "PK0204_1061",
+      sourcePrice: 9026.1,
+      compareAtPrice: 11571.93,
+      currency: "BRL",
+      availability: "AVAILABLE",
+    });
+    expect(preview?.canonicalUrl).toBe("https://www.sleephouse.com.br/colchao-drift-adjustable-34-cm--pikolin-096-x-203-m-pk0204_1061/p?idSku=93926");
+    expect(preview?.images.map((image) => image.url)).toEqual([
+      "https://sleephouse.vteximg.com.br/arquivos/ids/169251/Drift_ambiente_ajustado.jpg?v=638948599484770000",
+      "https://sleephouse.vteximg.com.br/arquivos/ids/169260/Drift_ambiente_ajustado.jpg?v=638948599486800000",
+    ]);
+    expect(preview?.variants).toEqual([
+      expect.objectContaining({ label: "Solteiro Americano | 0,96 x 2,03 m", sku: "93926", sourcePrice: 9026.1, compareAtPrice: 11571.93, attributes: { tamanhos: "Solteiro Americano - 0,96 x 2,03 M" } }),
+      expect.objectContaining({ label: "Queen Size | 1,58 x 1,98 m", sku: "93928", sourcePrice: 13738.94, compareAtPrice: 17614.04, attributes: { tamanhos: "Queen Size - 1,58 X 1,98 M" } }),
+    ]);
+  });
+
+  it("extrai Sleep House do skuJson da página canônica sem depender da API", () => {
+    const preview = parseProductHtmlWithAdapters(`
+      <script>
+        vtex.events.addData({"pageCategory":"Product","productCategoryName":"Colchão"});
+        var skuJson_0 = {
+          "productId":243058788,
+          "name":"Colchão Pikolin - Drift Adjustable - 34 cm",
+          "available":true,
+          "skus":[
+            {"sku":93926,"skuname":"Solteiro Americano | 0,96 x 2,03 m","dimensions":{"Tamanhos":"Solteiro Americano - 0,96 x 2,03 M"},"available":true,"listPrice":1157193,"bestPrice":902610,"image":"https://sleephouse.vteximg.com.br/arquivos/ids/169251-292-292/Drift_ambiente_ajustado.jpg?v=1"},
+            {"sku":93928,"skuname":"Queen Size | 1,58 x 1,98 m","dimensions":{"Tamanhos":"Queen Size - 1,58 X 1,98 M"},"available":false,"listPrice":1761404,"bestPrice":1373894,"image":"https://sleephouse.vteximg.com.br/arquivos/ids/169260-292-292/Drift_ambiente_ajustado.jpg?v=1"}
+          ]
+        };
+      </script>
+      <div class="productDescription">Movimento inteligente <strong>e conforto.</strong></div>
+    `, new URL("https://www.sleephouse.com.br/produto/p?idSku=93928"));
+
+    expect(preview.extraction.adapter).toBe("sleep-house");
+    expect(preview).toMatchObject({
+      title: "Colchão Pikolin - Drift Adjustable - 34 cm",
+      category: "Colchão",
+      description: "Movimento inteligente e conforto.",
+      sourcePrice: 13738.94,
+      compareAtPrice: 17614.04,
+      availability: "OUT_OF_STOCK",
+    });
+    expect(preview.variants[0]).toMatchObject({ sku: "93928", sourcePrice: 13738.94, availability: "OUT_OF_STOCK" });
+    expect(preview.images[0]?.url).toBe("https://sleephouse.vteximg.com.br/arquivos/ids/169260/Drift_ambiente_ajustado.jpg?v=1");
+  });
+
+  it("falha com segurança quando a página Sleep House e a API pública não expõem produto", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
+      const url = input instanceof URL ? input.toString() : String(input);
+      if (url.includes("/api/catalog_system/pub/products/search")) {
+        return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("", { status: 404, headers: { "content-type": "text/html" } });
+    }));
+
+    await expect(previewProductFromUrl("https://www.sleephouse.com.br/produto-inexistente/p?idSku=00000")).rejects.toMatchObject({ code: "fetch-failed" });
+  });
 });
+
+function sleepHouseVtexProduct() {
+  return [{
+    productId: "243058788",
+    productName: "Colchão Pikolin - Drift Adjustable - 34 cm",
+    brand: "Pikolin",
+    link: "https://www.sleephouse.com.br/colchao-drift-adjustable-34-cm--pikolin-096-x-203-m-pk0204_1061/p",
+    productReference: "PK0204_1061",
+    categories: ["/Colchão/", "/Colchão/Por tamanho/"],
+    description: "Movimento inteligente e conforto absoluto.",
+    items: [
+      {
+        itemId: "93926",
+        name: "Solteiro Americano | 0,96 x 2,03 m",
+        variations: ["Tamanhos"],
+        Tamanhos: ["Solteiro Americano - 0,96 x 2,03 M"],
+        images: [{ imageUrl: "https://sleephouse.vteximg.com.br/arquivos/ids/169251/Drift_ambiente_ajustado.jpg?v=638948599484770000" }],
+        sellers: [{ sellerDefault: true, commertialOffer: { Price: 9026.1, ListPrice: 11571.93, AvailableQuantity: 10, IsAvailable: true } }],
+      },
+      {
+        itemId: "93928",
+        name: "Queen Size | 1,58 x 1,98 m",
+        variations: ["Tamanhos"],
+        Tamanhos: ["Queen Size - 1,58 X 1,98 M"],
+        images: [{ imageUrl: "https://sleephouse.vteximg.com.br/arquivos/ids/169260/Drift_ambiente_ajustado.jpg?v=638948599486800000" }],
+        sellers: [{ sellerDefault: true, commertialOffer: { Price: 13738.94, ListPrice: 17614.04, AvailableQuantity: 100, IsAvailable: true } }],
+      },
+    ],
+  }];
+}
