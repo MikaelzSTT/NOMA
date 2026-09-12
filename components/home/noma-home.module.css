@@ -315,7 +315,8 @@
 .houseStage {
   position: sticky;
   top: 0;
-  height: 100svh;
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #26251f;
   color: #fff;
@@ -2447,7 +2448,8 @@
   }
 
   .houseScroll {
-    height: 100svh;
+    height: 100vh;
+    height: 100dvh;
   }
 
   .houseStage {

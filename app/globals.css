@@ -201,3 +201,7 @@ body:has(.noma-home) [data-store-header],
 body:has(.noma-home) [data-store-footer] {
   display: none;
 }
+
+body:has(.noma-home) .store-main {
+  padding-top: 0;
+}

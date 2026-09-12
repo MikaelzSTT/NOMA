@@ -41,6 +41,9 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    useTypeScriptCli: false,
+  },
   serverExternalPackages: ["read-excel-file", "unzipper"],
   poweredByHeader: false,
   images: {
