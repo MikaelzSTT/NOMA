@@ -17,6 +17,7 @@ import { calculateDiscount, slugify } from "@/lib/utils";
 import { productImageStorageFields } from "@/lib/product-image-storage";
 import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
+import { safeProductSupplierSyncLog, safeProductSupplierSyncMessage, syncExistingProductFromSupplier } from "@/lib/admin/product-supplier-sync";
 import { SHIPPING_STRATEGIES } from "@/lib/shipping/types";
 
 export interface LoginState { error?: string }
@@ -354,6 +355,31 @@ export async function updateInternalProductAction(formData: FormData) {
   revalidatePath(`/admin/produtos/${id}`);
   revalidatePath("/", "layout");
   redirect(`/admin/produtos/${id}?saved=ok&market=${market}`);
+}
+
+export async function syncProductWithSupplierAction(formData: FormData) {
+  await requireAdmin();
+  const parsed = z.object({
+    id: z.string().min(1),
+    market: z.string().transform((value) => value.toUpperCase()).refine(isMarket),
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(`/admin/produtos/${String(formData.get("id"))}?sync=error`);
+
+  let result: Awaited<ReturnType<typeof syncExistingProductFromSupplier>>;
+  try {
+    result = await syncExistingProductFromSupplier(parsed.data.id, parsed.data.market);
+  } catch (error) {
+    console.warn("[Admin product supplier sync] failed", {
+      productId: parsed.data.id,
+      market: parsed.data.market,
+      ...safeProductSupplierSyncLog(error),
+    });
+    const message = encodeURIComponent(safeProductSupplierSyncMessage(error));
+    redirect(`/admin/produtos/${parsed.data.id}?sync=error&market=${parsed.data.market}&message=${message}`);
+  }
+  revalidatePath(`/admin/produtos/${parsed.data.id}`);
+  revalidatePath("/", "layout");
+  redirect(`/admin/produtos/${parsed.data.id}?sync=ok&market=${parsed.data.market}&syncedAt=${encodeURIComponent(result.syncedAt.toISOString())}`);
 }
 
 export async function toggleProductAction(formData: FormData) {

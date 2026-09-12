@@ -325,7 +325,7 @@ describe("importação de produto por URL", () => {
       "https://sleephouse.vteximg.com.br/arquivos/ids/169260/Drift_ambiente_ajustado.jpg?v=638948599486800000",
     ]);
     expect(preview?.variants).toEqual([
-      expect.objectContaining({ label: "Solteiro Americano | 0,96 x 2,03 m", sku: "93926", sourcePrice: 9026.1, compareAtPrice: 11571.93, attributes: { tamanhos: "Solteiro Americano - 0,96 x 2,03 M" } }),
+      expect.objectContaining({ label: "Solteiro Americano | 0,96 x 2,03 m", sku: "93926", sourcePrice: 9026.1, compareAtPrice: 11571.93, stock: 10, attributes: { tamanhos: "Solteiro Americano - 0,96 x 2,03 M" } }),
       expect.objectContaining({ label: "Queen Size | 1,58 x 1,98 m", sku: "93928", sourcePrice: 13738.94, compareAtPrice: 17614.04, attributes: { tamanhos: "Queen Size - 1,58 X 1,98 M" } }),
     ]);
   });

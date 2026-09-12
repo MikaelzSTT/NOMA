@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { updateInternalProductAction } from "@/app/admin/actions";
 import { OfferVariantFields } from "@/components/admin/offer-variant-fields";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
+import { SupplierSyncButton } from "@/components/admin/supplier-sync-button";
 import { toAdminOfferVariants } from "@/lib/admin/offer-variant-mapper";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -118,6 +119,12 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
       {raw.saved === "created" && <div className="admin-alert success">Produto manual criado.</div>}
       {raw.saved === "error" && <div className="admin-alert error">Não foi possível validar as alterações.</div>}
       {raw.saved === "sale-price-required" && <div className="admin-alert error">Defina o preço de venda da NOMA para todas as variantes ativas com custo antes de publicar.</div>}
+      {raw.sync === "ok" && typeof raw.syncedAt === "string" && <div className="admin-alert success">Sincronização concluída em {formatDate(raw.syncedAt)}.</div>}
+      {raw.sync === "error" && <div className="admin-alert error">{typeof raw.message === "string" ? raw.message : "Não foi possível sincronizar este produto com o fornecedor."}</div>}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <SupplierSyncButton productId={product.id} market={selectedMarket} disabled={!selectedOffer || !(selectedOffer.sourceUrl ?? product.sourceUrl)} />
+        {selectedOffer?.sourceUrl && <a href={selectedOffer.sourceUrl} target="_blank" rel="noopener noreferrer" className="button-secondary">Abrir URL de origem <ExternalLink size={16} /></a>}
+      </div>
       <section className="admin-panel mb-6">
         <h2>Ofertas por mercado</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -161,7 +168,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
           <div className="flex flex-wrap gap-6"><label className="check-row"><input name="active" type="checkbox" value="true" defaultChecked={selectedOffer?.active ?? product.active} />Oferta ativa na vitrine</label><label className="check-row"><input name="featured" type="checkbox" value="true" defaultChecked={selectedOffer?.featured ?? product.featured} />Exibir como destaque</label></div>
         </section>
 
-        <div className="flex flex-wrap gap-3"><button className="button-primary"><Save size={17} /> Salvar alterações</button>{selectedOffer?.sourceUrl && <a href={selectedOffer.sourceUrl} target="_blank" rel="noopener noreferrer" className="button-secondary">Abrir URL de origem <ExternalLink size={16} /></a>}</div>
+        <div className="flex flex-wrap gap-3"><button className="button-primary"><Save size={17} /> Salvar alterações</button></div>
       </form>
     </div>
   );

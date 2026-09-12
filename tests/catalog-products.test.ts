@@ -203,6 +203,31 @@ describe("upsertCatalogProduct", () => {
       manualPriceOverride: true,
     });
   });
+
+  it("sincroniza produto existente sem criar duplicata", async () => {
+    mockExistingOffer({
+      variants: [{ sku: "SUP-URL-1-P", stock: 1, active: true, availability: "AVAILABLE", salePrice: 1234, manualPriceOverride: true }],
+      manualPriceOverride: true,
+      sellingPrice: 1234,
+    });
+
+    await upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      productWithVariants([{ sku: "SUP-URL-1-P", stock: 0, availability: "OUT_OF_STOCK" }]),
+      {
+        market: "BR",
+        existingProductId: "product-1",
+        preserveManualPrice: true,
+        preserveProductImages: true,
+        preservePublicationState: true,
+      },
+    );
+
+    expect(mocks.transaction.product.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.productMarketOffer.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.product.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "product-1" } }));
+    expect(mocks.transaction.productMarketOffer.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "offer-1" } }));
+  });
 });
 
 function productWithVariants(variants: Array<{ sku: string; stock: number; active?: boolean; availability?: NormalizedSupplierProduct["availability"] }>) {
@@ -241,7 +266,7 @@ function mockExistingOffer(overrides: {
       attributes: {},
     })),
     removedAt: null,
-    product: { id: "product-1", slug: "mesa-url", archivedAt: null },
+    product: { id: "product-1", slug: "mesa-url", archivedAt: null, active: true, featured: false, popularityScore: 0 },
   } as never);
 }
 

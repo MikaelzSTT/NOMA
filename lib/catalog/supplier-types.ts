@@ -21,9 +21,12 @@ export interface NormalizedVariant {
   options: Record<string, string>;
   costPrice?: number;
   sellingPrice?: number;
+  compareAtPrice?: number;
   stock: number;
   active?: boolean;
   availability?: NormalizedAvailability;
+  sourceUrl?: string;
+  imageUrl?: string;
 }
 
 /** Formato unico aceito pelo catalogo, independentemente da fonte. */

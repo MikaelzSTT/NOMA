@@ -15,6 +15,7 @@ export interface ImportedProductVariant {
   sourcePrice?: number;
   compareAtPrice?: number;
   currency?: string;
+  stock?: number;
   availability: ImportedAvailability;
   sourceUrl?: string;
   imageUrl?: string;

@@ -18,9 +18,12 @@ export const normalizedVariantSchema = z.object({
   options: z.record(z.string(), z.string().max(500)),
   costPrice: finiteMoney.optional(),
   sellingPrice: finiteMoney.optional(),
+  compareAtPrice: finiteMoney.optional(),
   stock: z.number().int().nonnegative(),
   active: z.boolean().default(true),
   availability: z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN", "REMOVED"]).optional(),
+  sourceUrl: httpOrLocalUrl.optional(),
+  imageUrl: imageUrl.optional(),
 });
 
 export const normalizedSupplierProductSchema = z.object({

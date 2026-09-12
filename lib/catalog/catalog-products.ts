@@ -20,6 +20,10 @@ interface UpsertOptions {
   market?: Market;
   manualPriceOverride?: boolean;
   preserveManualPrice?: boolean;
+  existingProductId?: string;
+  preserveProductImages?: boolean;
+  preservePublicationState?: boolean;
+  preserveSupplierDataWhenMissing?: boolean;
 }
 
 export async function upsertCatalogProduct(
@@ -86,16 +90,39 @@ export async function upsertCatalogProductInTransaction(
           stock: true,
           active: true,
           availability: true,
+          costPrice: true,
+          compareAtPrice: true,
+          sourceUrl: true,
+          imageUrl: true,
+          isDefault: true,
           manualPriceOverride: true,
           manualActiveOverride: true,
         },
       },
+      active: true,
+      featured: true,
+      popularityScore: true,
       removedAt: true,
-      product: { select: { id: true, slug: true, archivedAt: true } },
+      product: { select: { id: true, slug: true, archivedAt: true, active: true, featured: true, popularityScore: true } },
     },
   });
   const canonicalHash = canonicalProductHash(parsed.title, parsed.brand);
-  const existingBySupplierProductId = existingOffer?.product ?? await transaction.product.findUnique({
+  if (options.existingProductId && existingOffer && existingOffer.productId !== options.existingProductId) {
+    throw new Error("Oferta encontrada pertence a outro produto.");
+  }
+  const existingByForcedProductId = options.existingProductId && !existingOffer ? await transaction.product.findUnique({
+    where: { id: options.existingProductId },
+    select: {
+      id: true,
+      slug: true,
+      archivedAt: true,
+      active: true,
+      featured: true,
+      popularityScore: true,
+    },
+  }) : null;
+  if (options.existingProductId && !existingOffer && !existingByForcedProductId) throw new Error("Produto existente não encontrado para sincronização.");
+  const existingBySupplierProductId = existingOffer?.product ?? existingByForcedProductId ?? await transaction.product.findUnique({
     where: {
       supplierId_supplierProductId: {
         supplierId: supplier.id,
@@ -106,22 +133,30 @@ export async function upsertCatalogProductInTransaction(
       id: true,
       slug: true,
       archivedAt: true,
+      active: true,
+      featured: true,
+      popularityScore: true,
     },
   });
-  const existing = existingBySupplierProductId ?? await transaction.product.findFirst({
-    where: {
-      OR: [
-        { canonicalHash },
-        { sku: parsed.sku },
-        ...(parsed.sourceUrl ? [{ sourceUrl: parsed.sourceUrl }] : []),
-      ],
-    },
-    select: {
-      id: true,
-      slug: true,
-      archivedAt: true,
-    },
-  });
+  const existing = existingBySupplierProductId ?? (options.existingProductId
+    ? null
+    : await transaction.product.findFirst({
+        where: {
+          OR: [
+            { canonicalHash },
+            { sku: parsed.sku },
+            ...(parsed.sourceUrl ? [{ sourceUrl: parsed.sourceUrl }] : []),
+          ],
+        },
+        select: {
+          id: true,
+          slug: true,
+          archivedAt: true,
+          active: true,
+          featured: true,
+          popularityScore: true,
+        },
+      }));
 
   const catalogRule = await transaction.pricingRule.findFirst({
     where: {
@@ -186,18 +221,24 @@ export async function upsertCatalogProductInTransaction(
     costPrice: variant.costPrice,
     sellingPrice: variant.sellingPrice,
     stock: variant.stock,
-    active: variant.active,
+    active: importedVariantIsActive(variant, undefined),
   }));
   const offerVariants = parsed.variants.map((variant, index) => {
-    const costPrice = variant.costPrice ?? parsed.costPrice ?? 0;
     const existingVariant = existingOffer?.variants.find((item) => variantMatchesExistingOfferVariant(item, variant));
+    const costPrice = variant.costPrice
+      ?? (options.preserveSupplierDataWhenMissing && existingVariant?.costPrice != null ? Number(existingVariant.costPrice) : undefined)
+      ?? parsed.costPrice
+      ?? 0;
+    const variantCompareAtPrice = variant.compareAtPrice
+      ?? (options.preserveSupplierDataWhenMissing && existingVariant?.compareAtPrice != null ? Number(existingVariant.compareAtPrice) : undefined)
+      ?? compareAtPrice;
     const variantManualOverride = manualPriceOverride || Boolean(existingVariant?.manualPriceOverride);
     const salePrice = variantManualOverride
       ? hasExplicitManualPrice
         ? variant.sellingPrice ?? parsed.sellingPrice ?? sellingPrice ?? Number(existingVariant?.salePrice ?? 0)
         : existingVariant?.salePrice == null ? variant.sellingPrice ?? parsed.sellingPrice ?? sellingPrice ?? 0 : Number(existingVariant.salePrice)
       : market === "BR" && costPrice > 0
-        ? calculateNomaBrSalePrice({ costPrice, compareAtPrice }).salePrice
+        ? calculateNomaBrSalePrice({ costPrice, compareAtPrice: variantCompareAtPrice }).salePrice
         : variant.sellingPrice ?? sellingPrice ?? 0;
     const availability = variant.availability ?? (variant.stock > 0 ? "AVAILABLE" as const : "OUT_OF_STOCK" as const);
     return {
@@ -209,13 +250,13 @@ export async function upsertCatalogProductInTransaction(
       } as Prisma.InputJsonValue,
       costPrice,
       salePrice,
-      compareAtPrice,
+      compareAtPrice: variantCompareAtPrice,
       stock: variant.stock,
       active: importedVariantIsActive(variant, existingVariant),
       availability,
-      sourceUrl: parsed.sourceUrl,
-      imageUrl: null,
-      isDefault: index === 0,
+      sourceUrl: variant.sourceUrl ?? parsed.sourceUrl,
+      imageUrl: variant.imageUrl ?? (options.preserveSupplierDataWhenMissing ? existingVariant?.imageUrl ?? null : null),
+      isDefault: existingVariant?.isDefault ?? index === 0,
       position: index,
       manualPriceOverride: variantManualOverride,
     };
@@ -241,8 +282,8 @@ export async function upsertCatalogProductInTransaction(
     sourceUrl: parsed.sourceUrl,
     attributes: parsed.attributes as Prisma.InputJsonValue,
     source: supplier.adapterKey,
-    active: existing?.archivedAt ? false : parsed.active,
-    featured: parsed.featured,
+    active: options.preservePublicationState && existing ? existing.active : existing?.archivedAt ? false : parsed.active,
+    featured: options.preservePublicationState && existing ? existing.featured : parsed.featured,
     manualPriceOverride,
     canonicalHash,
     categoryId: category.id,
@@ -267,7 +308,7 @@ export async function upsertCatalogProductInTransaction(
             lastSyncedAt: now,
           }),
           ...(market === "BR" ? { supplierProductId: parsed.supplierProductId, supplierId: supplier.id } : {}),
-          ...(market === "BR" && images.length > 0 ? { images: { deleteMany: {}, create: images } } : {}),
+          ...(market === "BR" && !options.preserveProductImages && images.length > 0 ? { images: { deleteMany: {}, create: images } } : {}),
           ...(market === "BR" ? { variants: { deleteMany: {}, create: variants } } : {}),
         },
       })
@@ -303,9 +344,9 @@ export async function upsertCatalogProductInTransaction(
     shippingCost: parsed.shippingCost,
     estimatedDelivery: parsed.estimatedDelivery,
     sourceUrl: parsed.sourceUrl,
-    active: existing?.archivedAt ? false : parsed.active,
-    featured: parsed.featured,
-    popularityScore: parsed.featured ? Math.max(100, existingOffer?.productId ? 0 : 100) : 0,
+    active: options.preservePublicationState && existingOffer ? existingOffer.active : existing?.archivedAt ? false : parsed.active,
+    featured: options.preservePublicationState && existingOffer ? existingOffer.featured : parsed.featured,
+    popularityScore: options.preservePublicationState && existingOffer ? existingOffer.popularityScore : parsed.featured ? Math.max(100, existingOffer?.productId ? 0 : 100) : 0,
     manualPriceOverride,
     pricingRuleType: existingOffer?.pricingRuleType ?? null,
     pricingRuleValue: existingOffer?.pricingRuleValue ?? null,
@@ -350,9 +391,14 @@ type ExistingOfferVariant = {
   sku: string | null;
   attributes: Prisma.JsonValue;
   salePrice: Prisma.Decimal | number;
+  costPrice?: Prisma.Decimal | number | null;
+  compareAtPrice?: Prisma.Decimal | number | null;
   stock: number;
   active: boolean;
   availability: string;
+  sourceUrl?: string | null;
+  imageUrl?: string | null;
+  isDefault?: boolean | null;
   manualPriceOverride: boolean;
   manualActiveOverride?: boolean | null;
 };

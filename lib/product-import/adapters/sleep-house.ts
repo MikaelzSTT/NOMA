@@ -130,6 +130,7 @@ function variantFromVtexItem(product: Record<string, unknown>, item: Record<stri
     sourcePrice: price,
     compareAtPrice: listPrice,
     currency: "BRL",
+    stock: offerStock(offer),
     availability: offerAvailability(offer),
     sourceUrl: productUrlWithSku(text(readValue(product, ["link"])) ?? sourceUrl.toString(), itemId),
     imageUrl: imageValues(vtexItemImages(item), sourceUrl, label)[0]?.url,
@@ -183,8 +184,12 @@ function bestOffer(item?: Record<string, unknown>) {
 
 function offerAvailability(offer?: Record<string, unknown>): ImportedAvailability {
   if (!offer) return "UNKNOWN";
-  if (offer.IsAvailable === true || (money(offer.AvailableQuantity) ?? 0) > 0) return "AVAILABLE";
+  if (offer.IsAvailable === true || offerStock(offer) > 0) return "AVAILABLE";
   return "OUT_OF_STOCK";
+}
+
+function offerStock(offer?: Record<string, unknown>) {
+  return Math.max(0, Math.floor(money(offer?.AvailableQuantity) ?? 0));
 }
 
 function vtexItemImages(item?: Record<string, unknown>) {
