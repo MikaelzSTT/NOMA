@@ -354,7 +354,7 @@ type ExistingOfferVariant = {
   active: boolean;
   availability: string;
   manualPriceOverride: boolean;
-  manualActiveOverride: boolean;
+  manualActiveOverride?: boolean | null;
 };
 
 function importedVariantIsActive(
@@ -362,7 +362,7 @@ function importedVariantIsActive(
   existingVariant: ExistingOfferVariant | undefined,
 ) {
   if (variant.availability === "REMOVED") return false;
-  if (existingVariant?.manualActiveOverride) return false;
+  if (existingVariant?.manualActiveOverride === true) return false;
   if (existingVariant?.active === false && !isLegacyOutOfStockAutoDisabledVariant(variant, existingVariant)) return false;
   if (variant.active === false && variant.availability !== "OUT_OF_STOCK" && variant.stock > 0) return false;
   return true;

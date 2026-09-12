@@ -455,13 +455,13 @@ type ExistingAdminOfferVariant = {
   sku: string | null;
   attributes: Prisma.JsonValue;
   active: boolean;
-  manualActiveOverride: boolean;
+  manualActiveOverride?: boolean | null;
 };
 
 function variantManualActiveOverride(variant: ParsedOfferVariant, existingVariants: ExistingAdminOfferVariant[]) {
   if (variant.active) return false;
   const existingVariant = existingVariants.find((item) => adminVariantMatches(item, variant));
-  return existingVariant?.manualActiveOverride || existingVariant?.active === true || !existingVariant;
+  return existingVariant?.manualActiveOverride === true || existingVariant?.active === true || !existingVariant;
 }
 
 function adminVariantMatches(existing: ExistingAdminOfferVariant, incoming: ParsedOfferVariant) {

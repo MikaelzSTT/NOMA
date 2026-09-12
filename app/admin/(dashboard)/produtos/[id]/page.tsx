@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Prisma } from "@/generated/prisma/client";
-import { ArrowLeft, ExternalLink, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ExternalLink, Save } from "lucide-react";
 import { notFound } from "next/navigation";
 import { updateInternalProductAction } from "@/app/admin/actions";
-import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/offer-variant-fields";
+import { OfferVariantFields } from "@/components/admin/offer-variant-fields";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
+import { toAdminOfferVariants } from "@/lib/admin/offer-variant-mapper";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, MARKETS, isMarket, type Market } from "@/lib/market";
@@ -12,10 +13,92 @@ import { formatDate, formatMoney } from "@/lib/utils";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
+const productEditSelect = {
+  id: true,
+  supplierProductId: true,
+  supplierName: true,
+  sku: true,
+  title: true,
+  shortDescription: true,
+  description: true,
+  subcategory: true,
+  costPrice: true,
+  sellingPrice: true,
+  compareAtPrice: true,
+  stock: true,
+  availability: true,
+  estimatedDelivery: true,
+  sourceUrl: true,
+  active: true,
+  featured: true,
+  popularityScore: true,
+  internalNotes: true,
+  syncStatus: true,
+  lastSyncedAt: true,
+  supplier: { select: { name: true, adapterKey: true } },
+  category: { select: { name: true } },
+  brand: { select: { name: true } },
+  images: { select: { url: true }, orderBy: { position: "asc" as const } },
+  offers: {
+    select: {
+      market: true,
+      sku: true,
+      title: true,
+      shortDescription: true,
+      description: true,
+      images: true,
+      currency: true,
+      costPrice: true,
+      sellingPrice: true,
+      compareAtPrice: true,
+      stockQuantity: true,
+      availability: true,
+      shippingCost: true,
+      estimatedDelivery: true,
+      estimatedDeliveryMinDays: true,
+      estimatedDeliveryMaxDays: true,
+      sourceUrl: true,
+      active: true,
+      featured: true,
+      popularityScore: true,
+      manualPriceOverride: true,
+      supplier: { select: { name: true } },
+      variants: {
+        select: {
+          label: true,
+          sku: true,
+          attributes: true,
+          costPrice: true,
+          salePrice: true,
+          compareAtPrice: true,
+          manualPriceOverride: true,
+          stock: true,
+          active: true,
+          availability: true,
+          sourceUrl: true,
+          imageUrl: true,
+          isDefault: true,
+        },
+        orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
+      },
+    },
+    orderBy: { market: "asc" as const },
+  },
+} satisfies Prisma.ProductSelect;
+
+type ProductEditPayload = Prisma.ProductGetPayload<{ select: typeof productEditSelect }>;
+type ProductEditOffer = ProductEditPayload["offers"][number];
+
 export default async function AdminProductEditPage({ params, searchParams }: Props) {
   await requireAdmin();
   const [{ id }, raw] = await Promise.all([params, searchParams]);
-  const product = await db.product.findUnique({ where: { id }, include: { supplier: true, category: true, brand: true, images: { orderBy: { position: "asc" } }, offers: { include: { supplier: true, variants: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] } }, orderBy: { market: "asc" } } } });
+  let product: ProductEditPayload | null;
+  try {
+    product = await db.product.findUnique({ where: { id }, select: productEditSelect });
+  } catch (error) {
+    console.error("Failed to load admin product edit page.", { productId: id, error });
+    return <AdminProductLoadError />;
+  }
   if (!product) notFound();
   const selectedMarket = typeof raw.market === "string" && isMarket(raw.market.toUpperCase()) ? raw.market.toUpperCase() as Market : "BR";
   const selectedOffer = product.offers.find((offer) => offer.market === selectedMarket);
@@ -84,52 +167,26 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
   );
 }
 
+function AdminProductLoadError() {
+  return (
+    <div className="admin-page max-w-5xl">
+      <Link href="/admin/produtos" className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-brand"><ArrowLeft size={16} /> Voltar para produtos</Link>
+      <section className="admin-panel">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-1 text-red-600" size={22} />
+          <div>
+            <h1 className="text-2xl font-black text-ink">Não foi possível carregar este produto</h1>
+            <p className="mt-2 text-sm text-muted">Tente novamente em instantes. O erro técnico foi registrado no servidor.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ReadOnly({ label, value }: { label: string; value: string }) { return <div><p className="text-xs font-bold uppercase text-muted">{label}</p><p className="mt-1 text-sm font-semibold text-ink">{value}</p></div>; }
 function MoneyField({ name, label, value }: { name: string; label: string; value: number | null }) { return <label className="admin-field">{label}<input name={name} type="number" min="0" step="0.01" defaultValue={value ?? ""} /></label>; }
 
-function MarketOfferSummary({ market, offer }: { market: Market; offer?: { supplier: { name: string }; currency: string; costPrice: unknown; sellingPrice: unknown; stockQuantity: number; availability: string; active: boolean; featured: boolean; variants: unknown[] } }) {
+function MarketOfferSummary({ market, offer }: { market: Market; offer?: ProductEditOffer }) {
   return <div className="rounded-sm border border-border p-4 text-sm"><div className="flex items-start justify-between gap-3"><h3 className="font-extrabold text-ink">{MARKET_CONFIG[market].label}</h3><span className={`status-pill ${offer?.active ? "active" : "inactive"}`}>{offer ? offer.active ? "Ativa" : "Inativa" : "Sem oferta"}</span></div>{offer ? <div className="mt-3 grid gap-2"><p>Fornecedor: <strong>{offer.supplier.name}</strong></p><p>Custo: <strong>{offer.costPrice == null ? "—" : formatMoney(Number(offer.costPrice), offer.currency)}</strong></p><p>Preço: <strong>{offer.sellingPrice == null ? "Sem preço" : formatMoney(Number(offer.sellingPrice), offer.currency)}</strong></p><p>Estoque: <strong>{offer.stockQuantity}</strong></p><p>Disponibilidade: <strong>{offer.availability}</strong></p><p>Variantes: <strong>{offer.variants.length}</strong></p><p>Destaque: <strong>{offer.featured ? "Sim" : "Não"}</strong></p></div> : <p className="mt-3 text-muted">Produto não disponível neste mercado.</p>}</div>;
-}
-
-function toAdminOfferVariants(
-  offer: Prisma.ProductMarketOfferGetPayload<{ include: { variants: true } }> | undefined,
-  product: { title: string; sku: string; costPrice: unknown; sellingPrice: unknown; compareAtPrice: unknown; stock: number; availability: string },
-): AdminOfferVariant[] {
-  if (offer?.variants.length) {
-    return offer.variants.map((variant) => ({
-      label: variant.label,
-      sku: variant.sku ?? "",
-      attributes: publicVariantAttributes(variant.attributes),
-      costPrice: Number(variant.costPrice),
-      salePrice: Number(variant.salePrice),
-      compareAtPrice: variant.compareAtPrice == null ? undefined : Number(variant.compareAtPrice),
-      manualPriceOverride: variant.manualPriceOverride || offer.manualPriceOverride,
-      stock: variant.stock,
-      active: variant.active,
-      availability: variant.availability as AdminOfferVariant["availability"],
-      sourceUrl: variant.sourceUrl ?? "",
-      imageUrl: variant.imageUrl ?? "",
-      isDefault: variant.isDefault,
-    }));
-  }
-  return [{
-    label: "Padrão",
-    sku: offer?.sku ?? product.sku,
-    attributes: {},
-    costPrice: Number(offer?.costPrice ?? product.costPrice ?? 0),
-    salePrice: Number(offer?.sellingPrice ?? product.sellingPrice ?? 0),
-    compareAtPrice: offer?.compareAtPrice == null && product.compareAtPrice == null ? undefined : Number(offer?.compareAtPrice ?? product.compareAtPrice),
-    manualPriceOverride: offer?.manualPriceOverride ?? true,
-    stock: offer?.stockQuantity ?? product.stock,
-    active: offer?.active ?? true,
-    availability: (offer?.availability ?? product.availability) as AdminOfferVariant["availability"],
-    sourceUrl: offer?.sourceUrl ?? "",
-    imageUrl: "",
-    isDefault: true,
-  }];
-}
-
-function publicVariantAttributes(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => ["string", "number", "boolean"].includes(typeof item))) as Record<string, string | number | boolean>;
 }
