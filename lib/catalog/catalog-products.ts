@@ -24,6 +24,21 @@ interface UpsertOptions {
   preserveProductImages?: boolean;
   preservePublicationState?: boolean;
   preserveSupplierDataWhenMissing?: boolean;
+  allowVariantRemoval?: boolean;
+}
+
+export class CatalogVariantReconciliationError extends Error {
+  constructor(
+    readonly details: {
+      existingVariantCount: number;
+      incomingVariantCount: number;
+      incomingVariantLabels: string[];
+      incomingVariantSkus: string[];
+    },
+  ) {
+    super(`Sincronizacao abortada: fornecedor retornou ${details.incomingVariantCount} variante(s), mas a oferta existente possui ${details.existingVariantCount}.`);
+    this.name = "CatalogVariantReconciliationError";
+  }
 }
 
 export async function upsertCatalogProduct(
@@ -66,7 +81,38 @@ export async function upsertCatalogProductInTransaction(
       })
     : null;
 
-  const existingOffer = await transaction.productMarketOffer.findUnique({
+  const existingOfferSelect = {
+    id: true,
+    productId: true,
+    slug: true,
+    sellingPrice: true,
+    manualPriceOverride: true,
+    pricingRuleType: true,
+    pricingRuleValue: true,
+    variants: {
+      select: {
+        sku: true,
+        attributes: true,
+        salePrice: true,
+        stock: true,
+        active: true,
+        availability: true,
+        costPrice: true,
+        compareAtPrice: true,
+        sourceUrl: true,
+        imageUrl: true,
+        isDefault: true,
+        manualPriceOverride: true,
+        manualActiveOverride: true,
+      },
+    },
+    active: true,
+    featured: true,
+    popularityScore: true,
+    removedAt: true,
+    product: { select: { id: true, slug: true, archivedAt: true, active: true, featured: true, popularityScore: true } },
+  } satisfies Prisma.ProductMarketOfferSelect;
+  const matchingOffer = await transaction.productMarketOffer.findUnique({
     where: {
       supplierId_market_supplierProductId: {
         supplierId: supplier.id,
@@ -74,42 +120,16 @@ export async function upsertCatalogProductInTransaction(
         supplierProductId: parsed.supplierProductId,
       },
     },
-    select: {
-      id: true,
-      productId: true,
-      slug: true,
-      sellingPrice: true,
-      manualPriceOverride: true,
-      pricingRuleType: true,
-      pricingRuleValue: true,
-      variants: {
-        select: {
-          sku: true,
-          attributes: true,
-          salePrice: true,
-          stock: true,
-          active: true,
-          availability: true,
-          costPrice: true,
-          compareAtPrice: true,
-          sourceUrl: true,
-          imageUrl: true,
-          isDefault: true,
-          manualPriceOverride: true,
-          manualActiveOverride: true,
-        },
-      },
-      active: true,
-      featured: true,
-      popularityScore: true,
-      removedAt: true,
-      product: { select: { id: true, slug: true, archivedAt: true, active: true, featured: true, popularityScore: true } },
-    },
+    select: existingOfferSelect,
   });
   const canonicalHash = canonicalProductHash(parsed.title, parsed.brand);
-  if (options.existingProductId && existingOffer && existingOffer.productId !== options.existingProductId) {
+  if (options.existingProductId && matchingOffer && matchingOffer.productId !== options.existingProductId) {
     throw new Error("Oferta encontrada pertence a outro produto.");
   }
+  const existingOffer = matchingOffer ?? (options.existingProductId ? await transaction.productMarketOffer.findFirst({
+    where: { productId: options.existingProductId, market },
+    select: existingOfferSelect,
+  }) : null);
   const existingByForcedProductId = options.existingProductId && !existingOffer ? await transaction.product.findUnique({
     where: { id: options.existingProductId },
     select: {
@@ -259,8 +279,10 @@ export async function upsertCatalogProductInTransaction(
       isDefault: existingVariant?.isDefault ?? index === 0,
       position: index,
       manualPriceOverride: variantManualOverride,
+      manualActiveOverride: existingVariant?.manualActiveOverride ?? false,
     };
   });
+  assertSafeVariantReconciliation(existingOffer?.variants ?? [], offerVariants, options);
 
   const productCommon = {
     supplierName: supplier.name,
@@ -437,6 +459,34 @@ function variantMatchesExistingOfferVariant(
 
 function publicJsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function assertSafeVariantReconciliation(
+  existingVariants: ExistingOfferVariant[],
+  incomingVariants: Array<{ label: string; sku: string | null; attributes: Prisma.InputJsonValue }>,
+  options: UpsertOptions,
+) {
+  if (options.allowVariantRemoval) return;
+  const existingCount = existingVariants.length;
+  const incomingCount = incomingVariants.length;
+  if (existingCount < 2 || incomingCount >= existingCount) return;
+  if (incomingCount === 1 && !isGenericDefaultIncomingVariant(incomingVariants[0]) && incomingCount > Math.floor(existingCount / 2)) return;
+  throw new CatalogVariantReconciliationError({
+    existingVariantCount: existingCount,
+    incomingVariantCount: incomingCount,
+    incomingVariantLabels: incomingVariants.map((variant) => variant.label),
+    incomingVariantSkus: incomingVariants.map((variant) => variant.sku ?? "").filter(Boolean),
+  });
+}
+
+function isGenericDefaultIncomingVariant(variant: { label: string; sku: string | null; attributes: Prisma.InputJsonValue }) {
+  const label = normalizeVariantLabel(variant.label);
+  const attributes = publicJsonRecord(variant.attributes);
+  return ["padrao", "padrão", "default"].includes(label) && Object.keys(attributes).length === 0;
+}
+
+function normalizeVariantLabel(value: string) {
+  return value.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 
 async function availableSlug(

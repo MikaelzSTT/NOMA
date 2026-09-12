@@ -390,6 +390,26 @@ describe("importação de produto por URL", () => {
     expect(fetchMock.mock.calls[2]?.[0]).toEqual(new URL("https://sleephouse.vtexcommercestable.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"));
   });
 
+  it("usa o adapter Sleep House para URLs do host VTEX estavel e nao cai no Padrao generico", async () => {
+    const sourceUrl = "https://sleephouse.vtexcommercestable.com.br/colchao-drift-adjustable-34-cm-pikolin-096-x-203-m-pk0204_1061/p?idSku=93926";
+    const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
+      const url = input instanceof URL ? input : new URL(String(input));
+      if (url.pathname === "/api/catalog_system/pub/products/search") {
+        return Response.json(sleepHouseVtexProduct());
+      }
+      return new Response("<html><title>Login VTEX</title><p>R$ 1.000,00</p></html>", { status: 200, headers: { "content-type": "text/html" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const preview = await previewProductFromUrl(sourceUrl);
+
+    expect(preview.extraction.adapter).toBe("sleep-house");
+    expect(preview.variants).toHaveLength(2);
+    expect(preview.variants.map((variant) => variant.sku)).toEqual(["93926", "93928"]);
+    expect(preview.variants.map((variant) => variant.label)).not.toEqual(["Padrão"]);
+    expect(fetchMock).toHaveBeenCalledWith(new URL("https://sleephouse.vtexcommercestable.com.br/api/catalog_system/pub/products/search?fq=skuId%3A93926"), expect.anything());
+  });
+
   it("registra o status upstream quando o fallback público da Sleep House falha", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
       const url = input instanceof URL ? input : new URL(String(input));

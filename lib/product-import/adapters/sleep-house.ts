@@ -1,7 +1,7 @@
 import { absoluteUrl, compactText, extractTags, jsonFromScriptAssignments } from "@/lib/product-import/html";
 import type { ImportedAvailability, ImportedProductImage, ImportedProductVariant, ProductImportAdapter, ProductUrlImportPreview } from "@/lib/product-import/types";
 
-const SLEEP_HOUSE_DOMAINS = ["www.sleephouse.com.br", "sleephouse.com.br"];
+const SLEEP_HOUSE_DOMAINS = ["www.sleephouse.com.br", "sleephouse.com.br", "sleephouse.vtexcommercestable.com.br"];
 const SLEEP_HOUSE_PUBLIC_API_ORIGIN = "https://sleephouse.vtexcommercestable.com.br";
 
 export const sleepHouseAdapter: ProductImportAdapter = {

@@ -1,8 +1,8 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
+import { CatalogVariantReconciliationError, upsertCatalogProduct } from "@/lib/catalog/catalog-products";
 import type { NormalizedSupplierProduct } from "@/lib/catalog/supplier-types";
 import { normalizeSourceUrl } from "@/lib/catalog/source-url";
-import { upsertCatalogProduct } from "@/lib/catalog/catalog-products";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, type Market } from "@/lib/market";
 import type { ProductUrlImportPreview } from "@/lib/product-import/types";
@@ -10,7 +10,7 @@ import { previewProductFromUrl, safeProductUrlImportError } from "@/lib/product-
 
 export class ProductSupplierSyncError extends Error {
   constructor(
-    readonly code: "product-not-found" | "offer-not-found" | "missing-source-url" | "import-failed",
+    readonly code: "product-not-found" | "offer-not-found" | "missing-source-url" | "import-failed" | "variant-discrepancy",
     message: string,
     readonly cause?: unknown,
   ) {
@@ -82,6 +82,7 @@ const productSyncSelect = {
 
 type ProductForSupplierSync = Prisma.ProductGetPayload<{ select: typeof productSyncSelect }>;
 type OfferForSupplierSync = ProductForSupplierSync["offers"][number];
+type SupplierForSupplierSync = ProductForSupplierSync["supplier"];
 
 export async function syncExistingProductFromSupplier(productId: string, market: Market = "BR") {
   const product = await db.product.findUnique({ where: { id: productId }, select: productSyncSelect });
@@ -99,18 +100,52 @@ export async function syncExistingProductFromSupplier(productId: string, market:
   try {
     preview = await previewProductFromUrl(sourceUrl);
   } catch (error) {
+    await recordSyncFailure(product.id, offer.id, "Nao foi possivel importar dados desta URL do fornecedor.");
     throw new ProductSupplierSyncError("import-failed", "Nao foi possivel importar dados desta URL do fornecedor.", error);
   }
 
-  const candidate = previewToSupplierProduct(product, offer, preview, sourceUrl);
-  const saved = await upsertCatalogProduct(product.supplier, candidate, {
-    market,
-    existingProductId: product.id,
-    preserveManualPrice: true,
-    preserveProductImages: true,
-    preservePublicationState: true,
-    preserveSupplierDataWhenMissing: true,
-  });
+  const discrepancy = previewVariantDiscrepancy(offer, preview);
+  if (discrepancy) {
+    await recordSyncFailure(product.id, offer.id, discrepancy.message);
+    console.warn("[Admin product supplier sync] variant discrepancy", {
+      productId: product.id,
+      offerId: offer.id,
+      market,
+      sourceUrl,
+      existingVariantCount: discrepancy.existingVariantCount,
+      incomingVariantCount: discrepancy.incomingVariantCount,
+      incomingVariantLabels: discrepancy.incomingVariantLabels,
+      incomingVariantSkus: discrepancy.incomingVariantSkus,
+    });
+    throw new ProductSupplierSyncError("variant-discrepancy", discrepancy.message);
+  }
+
+  const supplier = await resolveSupplierForPreview(product.supplier, preview, market);
+  const candidate = previewToSupplierProduct(product, offer, preview, sourceUrl, supplier);
+  let saved: Awaited<ReturnType<typeof upsertCatalogProduct>>;
+  try {
+    saved = await upsertCatalogProduct(supplier, candidate, {
+      market,
+      existingProductId: product.id,
+      preserveManualPrice: true,
+      preserveProductImages: true,
+      preservePublicationState: true,
+      preserveSupplierDataWhenMissing: true,
+    });
+  } catch (error) {
+    if (error instanceof CatalogVariantReconciliationError) {
+      await recordSyncFailure(product.id, offer.id, error.message);
+      console.warn("[Admin product supplier sync] variant discrepancy", {
+        productId: product.id,
+        offerId: offer.id,
+        market,
+        sourceUrl,
+        ...error.details,
+      });
+      throw new ProductSupplierSyncError("variant-discrepancy", error.message, error);
+    }
+    throw error;
+  }
 
   return {
     productId: saved.id,
@@ -125,6 +160,7 @@ function previewToSupplierProduct(
   offer: OfferForSupplierSync,
   preview: ProductUrlImportPreview,
   sourceUrl: string,
+  supplier: SupplierForSupplierSync,
 ): NormalizedSupplierProduct {
   const existingVariants = new Map(offer.variants.map((variant) => [variantKey(variant.sku, variant.label, variant.attributes), variant]));
   const variants = previewVariants(preview).map((variant, index) => {
@@ -149,9 +185,11 @@ function previewToSupplierProduct(
   const defaultVariant = variants[0];
   const availability = defaultVariant?.availability ?? preview.availability;
   const fallbackCost = preview.sourcePrice ?? firstDefined(variants.map((variant) => variant.costPrice));
+  const supplierChanged = supplier.id !== product.supplier.id || supplier.adapterKey !== product.supplier.adapterKey;
+  const supplierProductId = supplierChanged && preview.sku ? preview.sku : offer.supplierProductId || product.supplierProductId;
 
   return {
-    supplierProductId: offer.supplierProductId || product.supplierProductId,
+    supplierProductId,
     sku: preview.sku ?? offer.sku ?? product.sku,
     title: product.title,
     shortDescription: product.shortDescription ?? undefined,
@@ -192,6 +230,77 @@ function previewVariants(preview: ProductUrlImportPreview) {
     sourceUrl: preview.canonicalUrl ?? preview.sourceUrl,
     imageUrl: preview.images[0]?.url,
   }];
+}
+
+async function resolveSupplierForPreview(
+  currentSupplier: SupplierForSupplierSync,
+  preview: ProductUrlImportPreview,
+  market: Market,
+): Promise<SupplierForSupplierSync> {
+  const adapterKey = preview.extraction.adapter;
+  if (!adapterKey || adapterKey === currentSupplier.adapterKey) return currentSupplier;
+  const existing = await db.supplier.findFirst({
+    where: { adapterKey, active: true, authorized: true, supportedMarkets: { has: market } },
+    select: { id: true, name: true, adapterKey: true, supportedMarkets: true },
+  });
+  if (existing) return existing;
+  if (adapterKey !== "sleep-house") return currentSupplier;
+  return db.supplier.upsert({
+    where: { adapterKey },
+    update: {
+      name: "Sleep House",
+      baseUrl: "https://www.sleephouse.com.br",
+      active: true,
+      authorized: true,
+      capabilities: { set: ["url-import"] },
+      supportedMarkets: { set: [market] },
+    },
+    create: {
+      name: "Sleep House",
+      slug: "sleep-house",
+      adapterKey,
+      baseUrl: "https://www.sleephouse.com.br",
+      active: true,
+      authorized: true,
+      capabilities: ["url-import"],
+      supportedMarkets: [market],
+    },
+    select: { id: true, name: true, adapterKey: true, supportedMarkets: true },
+  });
+}
+
+function previewVariantDiscrepancy(offer: OfferForSupplierSync, preview: ProductUrlImportPreview) {
+  const existingVariantCount = offer.variants.length;
+  const incomingVariantCount = preview.variants.length;
+  if (existingVariantCount < 2 || incomingVariantCount >= existingVariantCount) return null;
+  const incomingVariantLabels = preview.variants.map((variant) => variant.label);
+  const incomingVariantSkus = preview.variants.map((variant) => variant.sku ?? "").filter(Boolean);
+  const drasticReduction = incomingVariantCount <= Math.floor(existingVariantCount / 2);
+  const genericSingleVariant = incomingVariantCount === 1 && isGenericDefaultVariant(preview.variants[0]);
+  if (!drasticReduction && !genericSingleVariant) return null;
+  return {
+    existingVariantCount,
+    incomingVariantCount,
+    incomingVariantLabels,
+    incomingVariantSkus,
+    message: `Sincronizacao abortada: fornecedor retornou ${incomingVariantCount} variante(s), mas a oferta existente possui ${existingVariantCount}.`,
+  };
+}
+
+function isGenericDefaultVariant(variant: ProductUrlImportPreview["variants"][number] | undefined) {
+  if (!variant) return false;
+  const label = variant.label.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  return ["padrao", "default"].includes(label) && Object.keys(variant.attributes).length === 0;
+}
+
+async function recordSyncFailure(productId: string, offerId: string, message: string) {
+  const data = { syncStatus: "ERROR" as const, syncError: message, syncErrorAt: new Date() };
+  await Promise.all([
+    db.product.update({ where: { id: productId }, data }),
+    db.productMarketOffer.update({ where: { id: offerId }, data }),
+  ]).catch((error) => {
+    console.warn("[Admin product supplier sync] failed to record sync error", safeProductUrlImportError(error));
+  });
 }
 
 function stockFromAvailability(availability: NormalizedSupplierProduct["availability"], existingStock = 1) {

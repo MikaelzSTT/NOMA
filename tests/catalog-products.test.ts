@@ -228,15 +228,92 @@ describe("upsertCatalogProduct", () => {
     expect(mocks.transaction.product.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "product-1" } }));
     expect(mocks.transaction.productMarketOffer.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "offer-1" } }));
   });
+
+  it("produto existente com 5 variantes e sync remoto com 5 reconcilia por SKU sem duplicar", async () => {
+    mockExistingOffer({
+      variants: [
+        { sku: "SKU-CASAL", active: true, availability: "AVAILABLE", salePrice: 1100, manualPriceOverride: true },
+        { sku: "SKU-SOLTEIRO", active: true, availability: "AVAILABLE", salePrice: 900, manualPriceOverride: false },
+        { sku: "SKU-SOLTEIRO-AM", active: true, availability: "OUT_OF_STOCK", salePrice: 950, manualPriceOverride: false },
+        { sku: "SKU-QUEEN", active: true, availability: "AVAILABLE", salePrice: 1300, manualPriceOverride: false },
+        { sku: "SKU-KING", active: true, availability: "AVAILABLE", salePrice: 1500, manualPriceOverride: false },
+      ],
+      manualPriceOverride: false,
+    });
+
+    await upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      productWithVariants([
+        { sku: "SKU-KING", title: "King Size", stock: 1 },
+        { sku: "SKU-QUEEN", title: "Queen Size", stock: 2 },
+        { sku: "SKU-SOLTEIRO-AM", title: "Solteiro Americano", stock: 0, availability: "OUT_OF_STOCK" },
+        { sku: "SKU-SOLTEIRO", title: "Solteiro", stock: 3 },
+        { sku: "SKU-CASAL", title: "Casal", stock: 4 },
+      ]),
+      { market: "BR", existingProductId: "product-1", preserveManualPrice: true },
+    );
+
+    expect(mocks.transaction.product.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.productMarketOffer.create).not.toHaveBeenCalled();
+    expect(updatedOfferVariants()).toHaveLength(5);
+    expect(updatedOfferVariants().find((variant) => variant.sku === "SKU-CASAL")).toMatchObject({
+      label: "Casal",
+      salePrice: 1100,
+      manualPriceOverride: true,
+    });
+    expect(updatedOfferVariants().find((variant) => variant.sku === "SKU-SOLTEIRO-AM")).toMatchObject({
+      active: true,
+      stock: 0,
+      availability: "OUT_OF_STOCK",
+    });
+  });
+
+  it("produto existente com 5 variantes e remoto acidental com 1 Padrao aborta antes de escrever", async () => {
+    mockExistingOffer({
+      variants: [
+        { sku: "SKU-CASAL", active: true, availability: "AVAILABLE", salePrice: 1100, manualPriceOverride: true },
+        { sku: "SKU-SOLTEIRO", active: true, availability: "AVAILABLE", salePrice: 900, manualPriceOverride: false },
+        { sku: "SKU-SOLTEIRO-AM", active: true, availability: "OUT_OF_STOCK", salePrice: 950, manualPriceOverride: false },
+        { sku: "SKU-QUEEN", active: true, availability: "AVAILABLE", salePrice: 1300, manualPriceOverride: false },
+        { sku: "SKU-KING", active: true, availability: "AVAILABLE", salePrice: 1500, manualPriceOverride: false },
+      ],
+    });
+
+    await expect(upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      productWithVariants([{ sku: "SUP-URL-1-P", title: "Padrão", stock: 1, options: {} }]),
+      { market: "BR", existingProductId: "product-1", preserveManualPrice: true },
+    )).rejects.toThrow("Sincronizacao abortada");
+
+    expect(mocks.transaction.product.update).not.toHaveBeenCalled();
+    expect(mocks.transaction.productMarketOffer.update).not.toHaveBeenCalled();
+  });
+
+  it("preserva manualActiveOverride=true ao reconciliar variante existente", async () => {
+    mockExistingOffer({
+      variants: [{ sku: "SUP-URL-1-P", stock: 2, active: false, availability: "AVAILABLE", salePrice: 900, manualPriceOverride: false, manualActiveOverride: true }],
+    });
+
+    await upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      productWithVariants([{ sku: "SUP-URL-1-P", stock: 5 }]),
+      { market: "BR", preserveManualPrice: true },
+    );
+
+    expect(updatedOfferVariants()[0]).toMatchObject({
+      active: false,
+      manualActiveOverride: true,
+    });
+  });
 });
 
-function productWithVariants(variants: Array<{ sku: string; stock: number; active?: boolean; availability?: NormalizedSupplierProduct["availability"] }>) {
+function productWithVariants(variants: Array<{ sku: string; stock: number; active?: boolean; availability?: NormalizedSupplierProduct["availability"]; title?: string; options?: Record<string, string> }>) {
   return {
     ...product,
     variants: variants.map((variant) => ({
       sku: variant.sku,
-      title: "Padrão",
-      options: { tamanho: "Padrão" },
+      title: variant.title ?? "Padrão",
+      options: variant.options ?? { tamanho: variant.title ?? "Padrão" },
       costPrice: 500,
       sellingPrice: 900,
       stock: variant.stock,
