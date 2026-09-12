@@ -313,6 +313,7 @@ model ProductMarketOfferVariant {
   salePrice           Decimal            @db.Decimal(12, 2)
   compareAtPrice      Decimal?           @db.Decimal(12, 2)
   manualPriceOverride Boolean            @default(false)
+  manualActiveOverride Boolean           @default(false)
   stock               Int                @default(0)
   active              Boolean            @default(true)
   availability        AvailabilityStatus @default(UNKNOWN)

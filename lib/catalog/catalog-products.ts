@@ -83,9 +83,11 @@ export async function upsertCatalogProductInTransaction(
           sku: true,
           attributes: true,
           salePrice: true,
+          stock: true,
           active: true,
           availability: true,
           manualPriceOverride: true,
+          manualActiveOverride: true,
         },
       },
       removedAt: true,
@@ -348,19 +350,33 @@ type ExistingOfferVariant = {
   sku: string | null;
   attributes: Prisma.JsonValue;
   salePrice: Prisma.Decimal | number;
+  stock: number;
   active: boolean;
   availability: string;
   manualPriceOverride: boolean;
+  manualActiveOverride: boolean;
 };
 
 function importedVariantIsActive(
   variant: NormalizedSupplierProduct["variants"][number],
   existingVariant: ExistingOfferVariant | undefined,
 ) {
-  if (existingVariant?.active === false) return false;
   if (variant.availability === "REMOVED") return false;
+  if (existingVariant?.manualActiveOverride) return false;
+  if (existingVariant?.active === false && !isLegacyOutOfStockAutoDisabledVariant(variant, existingVariant)) return false;
   if (variant.active === false && variant.availability !== "OUT_OF_STOCK" && variant.stock > 0) return false;
   return true;
+}
+
+function isLegacyOutOfStockAutoDisabledVariant(
+  variant: NormalizedSupplierProduct["variants"][number],
+  existingVariant: ExistingOfferVariant,
+) {
+  const incomingAvailability = variant.availability ?? (variant.stock > 0 ? "AVAILABLE" : "OUT_OF_STOCK");
+  return existingVariant.availability === "OUT_OF_STOCK"
+    && existingVariant.stock === 0
+    && variant.stock === 0
+    && incomingAvailability === "OUT_OF_STOCK";
 }
 
 function variantMatchesExistingOfferVariant(

@@ -127,6 +127,43 @@ describe("upsertCatalogProduct", () => {
     });
   });
 
+  it("recupera variante legada desativada automaticamente por falta de estoque quando ela ainda existe no fornecedor", async () => {
+    mockExistingOffer({
+      variants: [{ sku: "SUP-URL-1-P", stock: 0, active: false, availability: "OUT_OF_STOCK", salePrice: 900, manualPriceOverride: false }],
+    });
+
+    await upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      productWithVariants([{ sku: "SUP-URL-1-P", stock: 0, availability: "OUT_OF_STOCK" }]),
+      { market: "BR", preserveManualPrice: true },
+    );
+
+    expect(updatedOfferVariants()[0]).toMatchObject({
+      sku: "SUP-URL-1-P",
+      stock: 0,
+      active: true,
+      availability: "OUT_OF_STOCK",
+    });
+  });
+
+  it("não recupera variante sem estoque quando há desativação manual registrada", async () => {
+    mockExistingOffer({
+      variants: [{ sku: "SUP-URL-1-P", stock: 0, active: false, availability: "OUT_OF_STOCK", salePrice: 900, manualPriceOverride: false, manualActiveOverride: true }],
+    });
+
+    await upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      productWithVariants([{ sku: "SUP-URL-1-P", stock: 0, availability: "OUT_OF_STOCK" }]),
+      { market: "BR", preserveManualPrice: true },
+    );
+
+    expect(updatedOfferVariants()[0]).toMatchObject({
+      stock: 0,
+      active: false,
+      availability: "OUT_OF_STOCK",
+    });
+  });
+
   it("reimport de zero para estoque positivo volta a deixar a variante comprável", async () => {
     mockExistingOffer({
       variants: [{ sku: "SUP-URL-1-P", active: true, availability: "OUT_OF_STOCK", salePrice: 900, manualPriceOverride: false }],
@@ -187,7 +224,7 @@ function productWithVariants(variants: Array<{ sku: string; stock: number; activ
 function mockExistingOffer(overrides: {
   manualPriceOverride?: boolean;
   sellingPrice?: number;
-  variants: Array<{ sku: string; active: boolean; availability: string; salePrice: number; manualPriceOverride: boolean }>;
+  variants: Array<{ sku: string; stock?: number; active: boolean; availability: string; salePrice: number; manualPriceOverride: boolean; manualActiveOverride?: boolean }>;
 }) {
   mocks.transaction.productMarketOffer.findUnique.mockResolvedValue({
     id: "offer-1",
@@ -199,6 +236,8 @@ function mockExistingOffer(overrides: {
     pricingRuleValue: null,
     variants: overrides.variants.map((variant) => ({
       ...variant,
+      stock: variant.stock ?? 0,
+      manualActiveOverride: variant.manualActiveOverride ?? false,
       attributes: {},
     })),
     removedAt: null,

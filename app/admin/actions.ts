@@ -242,7 +242,22 @@ export async function updateInternalProductAction(formData: FormData) {
     const product = await transaction.product.findUnique({ where: { id }, select: { id: true, slug: true, sku: true, supplierId: true, supplierProductId: true, supplier: { select: { id: true, name: true, supportedMarkets: true, shippingStrategy: true } } } });
     if (!product) throw new Error("Produto não encontrado.");
     if (!product.supplier.supportedMarkets.includes(market)) throw new Error(`Fornecedor ${product.supplier.name} não opera no mercado ${market}.`);
-    const previous = await transaction.productMarketOffer.findFirst({ where: { productId: id, market }, select: { id: true, sellingPrice: true, slug: true } });
+    const previous = await transaction.productMarketOffer.findFirst({
+      where: { productId: id, market },
+      select: {
+        id: true,
+        sellingPrice: true,
+        slug: true,
+        variants: {
+          select: {
+            sku: true,
+            attributes: true,
+            active: true,
+            manualActiveOverride: true,
+          },
+        },
+      },
+    });
     const fixedEstimatedDelivery = input.estimatedDelivery ?? null;
     const fixedEstimatedDeliveryMinDays = estimatedDeliveryMinDays ?? null;
     const fixedEstimatedDeliveryMaxDays = estimatedDeliveryMaxDays ?? null;
@@ -322,6 +337,7 @@ export async function updateInternalProductAction(formData: FormData) {
         salePrice: variant.salePrice,
         compareAtPrice: variant.compareAtPrice ?? null,
         manualPriceOverride: variant.manualPriceOverride,
+        manualActiveOverride: variantManualActiveOverride(variant, previous?.variants ?? []),
         stock: variant.stock,
         active: variant.active,
         availability: variant.availability,
@@ -433,4 +449,25 @@ function applyAutomaticNomaPricing(variants: ParsedOfferVariant[], market: Marke
     const calculated = calculateNomaBrSalePrice({ costPrice: variant.costPrice, compareAtPrice: variant.compareAtPrice });
     return { ...variant, salePrice: calculated.salePrice };
   });
+}
+
+type ExistingAdminOfferVariant = {
+  sku: string | null;
+  attributes: Prisma.JsonValue;
+  active: boolean;
+  manualActiveOverride: boolean;
+};
+
+function variantManualActiveOverride(variant: ParsedOfferVariant, existingVariants: ExistingAdminOfferVariant[]) {
+  if (variant.active) return false;
+  const existingVariant = existingVariants.find((item) => adminVariantMatches(item, variant));
+  return existingVariant?.manualActiveOverride || existingVariant?.active === true || !existingVariant;
+}
+
+function adminVariantMatches(existing: ExistingAdminOfferVariant, incoming: ParsedOfferVariant) {
+  if (existing.sku && incoming.sku && existing.sku === incoming.sku) return true;
+  const existingAttributes = existing.attributes && typeof existing.attributes === "object" && !Array.isArray(existing.attributes)
+    ? existing.attributes as Record<string, unknown>
+    : {};
+  return Boolean(existingAttributes.supplierVariantId && existingAttributes.supplierVariantId === incoming.attributes.supplierVariantId);
 }

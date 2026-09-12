@@ -174,6 +174,7 @@ export async function createManualProduct(input: ManualProductInput) {
             salePrice: variant.salePrice,
             compareAtPrice: variant.compareAtPrice ?? null,
             manualPriceOverride: variant.manualPriceOverride ?? true,
+            manualActiveOverride: !variant.active,
             stock: variant.stock,
             active: variant.active,
             availability: variant.availability,
