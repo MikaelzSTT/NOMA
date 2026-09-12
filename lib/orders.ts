@@ -247,6 +247,7 @@ function validateOfferForCheckout(offer: OfferForCheckout | null, variantId: str
     if (!variant) return invalid("variant_unavailable", 400, "Selecione uma variante disponivel.");
     if (variant.offerId !== offer.id) return invalid("variant_unavailable", 400, "Selecione uma variante disponivel.");
     if (!["AVAILABLE", "PREORDER"].includes(variant.availability)) return invalid("variant_unavailable", 409, "Variante indisponivel.");
+    if (variant.availability === "AVAILABLE" && variant.stock <= 0) return invalid("variant_unavailable", 409, "Variante indisponivel.");
     const unitPrice = roundMoney(Number(variant.salePrice));
     if (unitPrice <= 0) return invalid("invalid_price", 409, "Preco indisponivel.");
     return { type: "valid", variant, unitPrice, stock: variant.availability === "AVAILABLE" ? variant.stock : null };
@@ -255,6 +256,7 @@ function validateOfferForCheckout(offer: OfferForCheckout | null, variantId: str
   if (variantId) return invalid("variant_unavailable", 400, "Selecione uma variante disponivel.");
   const unitPrice = offer.sellingPrice == null ? 0 : roundMoney(Number(offer.sellingPrice));
   if (unitPrice <= 0) return invalid("invalid_price", 409, "Preco indisponivel.");
+  if (offer.availability === "AVAILABLE" && offer.stockQuantity <= 0) return invalid("product_unavailable", 409, "Produto indisponivel.");
   return { type: "valid", variant: null, unitPrice, stock: offer.availability === "AVAILABLE" ? offer.stockQuantity : null };
 }
 

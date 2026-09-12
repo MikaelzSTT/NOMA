@@ -69,4 +69,22 @@ describe("preview de URL para variantes comerciais", () => {
 
     expect(variants.map((variant) => variant.costPrice)).toEqual([900, 1300]);
   });
+
+  it("mantém variante existente sem estoque ativa para aparecer desabilitada no público", () => {
+    const variants = previewToOfferVariants({
+      ...preview,
+      variants: [
+        {
+          ...preview.variants[0],
+          availability: "OUT_OF_STOCK",
+        },
+      ],
+    }, "BRL");
+
+    expect(variants[0]).toMatchObject({
+      active: true,
+      stock: 0,
+      availability: "OUT_OF_STOCK",
+    });
+  });
 });

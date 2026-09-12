@@ -29,7 +29,7 @@ export function previewToOfferVariants(product: ProductUrlImportPreview, fallbac
       sourceCompareAtReference: variant.sourcePrice == null && hasSourceVariants ? undefined : variant.compareAtPrice ?? product.compareAtPrice,
       sourceCurrency: variant.currency ?? product.currency ?? fallbackCurrency,
       stock: availability === "OUT_OF_STOCK" ? 0 : 1,
-      active: availability !== "OUT_OF_STOCK",
+      active: true,
       availability,
       sourceUrl: variant.sourceUrl ?? product.canonicalUrl ?? product.sourceUrl,
       imageUrl: variant.imageUrl ?? (hasSourceVariants ? undefined : product.images[0]?.url),

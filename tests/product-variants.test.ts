@@ -34,6 +34,10 @@ describe("seletor compacto de variantes", () => {
     expect(variantIsSelectable({ ...variants[1], availability: "PREORDER" })).toBe(true);
   });
 
+  it("mantém variante ativa com stock zero visível, mas não clicável", () => {
+    expect(variantIsSelectable({ ...variants[1], active: true, stock: 0, availability: "OUT_OF_STOCK" })).toBe(false);
+  });
+
   it("mantém quatro variantes de colchão ativas e em estoque selecionáveis em um único seletor", () => {
     const mattressVariants = mattress();
     const groups = deriveVariantGroups(mattressVariants, "BR");

@@ -23,6 +23,7 @@ export interface NormalizedVariant {
   sellingPrice?: number;
   stock: number;
   active?: boolean;
+  availability?: NormalizedAvailability;
 }
 
 /** Formato unico aceito pelo catalogo, independentemente da fonte. */

@@ -9,6 +9,7 @@ import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
 import type { CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
+import { variantIsSelectable } from "@/lib/product-variants";
 import styles from "./product-detail.module.css";
 
 interface ProductDetailPurchaseProps {
@@ -56,7 +57,7 @@ export function ProductDetailPurchase({
   market,
 }: ProductDetailPurchaseProps) {
   const router = useRouter();
-  const defaultVariant = useMemo(() => variants.find((variant) => variant.isDefault) ?? variants[0], [variants]);
+  const defaultVariant = useMemo(() => variants.find((variant) => variant.isDefault && variantIsSelectable(variant)) ?? variants.find(variantIsSelectable) ?? variants.find((variant) => variant.isDefault) ?? variants[0], [variants]);
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant);
   const [variantImageSelected, setVariantImageSelected] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
@@ -74,7 +75,8 @@ export function ProductDetailPurchase({
   const requiresAssistedPurchase = market === "BR" && selectedPrice >= 10_000;
   const selectedShippingQuote = shippingQuotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null;
   const requiresShippingQuote = market === "BR" && !requiresAssistedPurchase;
-  const canStartCheckout = market === "BR" && !requiresAssistedPurchase && (!variants.length || Boolean(selectedVariantId)) && Boolean(selectedShippingQuote) && isShippingAddressComplete(shippingAddress);
+  const selectedVariantPurchasable = selectedVariant ? variantIsSelectable(selectedVariant) : productFallbackIsPurchasable(fallback);
+  const canStartCheckout = market === "BR" && !requiresAssistedPurchase && selectedVariantPurchasable && (!variants.length || Boolean(selectedVariantId)) && Boolean(selectedShippingQuote) && isShippingAddressComplete(shippingAddress);
   const displayedDeliveryEstimate = selectedShippingQuote ? shippingQuoteDeliveryEstimate(selectedShippingQuote) : estimatedDelivery;
 
   useEffect(() => {
@@ -124,7 +126,7 @@ export function ProductDetailPurchase({
                 value={postalCode}
                 onChange={(event) => setPostalCode(formatPostalCode(event.target.value))}
               />
-              <button type="submit" disabled={isShippingLoading || requiresAssistedPurchase || (variants.length > 0 && !selectedVariantId)}>
+              <button type="submit" disabled={isShippingLoading || requiresAssistedPurchase || !selectedVariantPurchasable || (variants.length > 0 && !selectedVariantId)}>
                 {isShippingLoading ? "Calculando" : "Calcular"}
               </button>
             </div>
@@ -186,7 +188,7 @@ export function ProductDetailPurchase({
             data-noma-selected-variant-id={selectedVariantId ?? undefined}
             onClick={handleBuyNow}
           >
-            {isCheckoutLoading ? "Iniciando checkout..." : requiresShippingQuote && !selectedShippingQuote ? "Calcule o frete para comprar" : selectedShippingQuote && !isShippingAddressComplete(shippingAddress) ? "Informe endereço para comprar" : "Comprar agora"}
+            {isCheckoutLoading ? "Iniciando checkout..." : !selectedVariantPurchasable ? "Indisponível no momento" : requiresShippingQuote && !selectedShippingQuote ? "Calcule o frete para comprar" : selectedShippingQuote && !isShippingAddressComplete(shippingAddress) ? "Informe endereço para comprar" : "Comprar agora"}
           </button>
         )}
         {(checkoutError || assistedMessage) && (
@@ -288,7 +290,7 @@ export function ProductDetailPurchase({
 
   async function handleShippingQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (requiresAssistedPurchase || isShippingLoading) return;
+    if (requiresAssistedPurchase || isShippingLoading || !selectedVariantPurchasable) return;
     setShippingMessage(null);
     setCheckoutError(null);
     setAssistedMessage(null);
@@ -395,4 +397,10 @@ function isShippingAddressComplete(address: ShippingAddressState) {
     && address.city.trim()
     && /^[A-Z]{2}$/.test(address.state),
   );
+}
+
+function productFallbackIsPurchasable(fallback: ProductDetailPurchaseProps["fallback"]) {
+  if (fallback.availability === "PREORDER") return true;
+  if (fallback.availability !== "AVAILABLE") return false;
+  return fallback.stock > 0;
 }

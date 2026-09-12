@@ -168,23 +168,29 @@ function validateOfferForShipping(offer: OfferForShipping | null, input: Shippin
   if (!offer.product.active || offer.product.archivedAt || !offer.active || offer.availability === "REMOVED") {
     return invalid("product_unavailable", 404, "Produto indisponivel.");
   }
+  if (!offerIsPurchasable(offer, input.quantity)) {
+    return invalid("product_unavailable", 409, "Produto indisponivel.");
+  }
   if (input.market && offer.market !== input.market) return invalid("market_mismatch", 400, "Mercado invalido para a oferta.");
   if (input.supplierId && offer.supplierId !== input.supplierId) return invalid("supplier_mismatch", 400, "Fornecedor invalido para a oferta.");
   if (offer.market !== "BR") return invalid("market_not_enabled", 400, "Cotacao automatica disponivel apenas para o Brasil nesta fase.");
   if (!offer.supplier.active) return invalid("supplier_unavailable", 409, "Fornecedor indisponivel.");
 
-  const variant = resolveVariant(offer, input.variantId);
+  const variant = resolveVariant(offer, input.variantId, input.quantity);
   if (variant instanceof ShippingQuoteError) return { type: "invalid", error: variant };
   return { type: "valid", offer, variant };
 }
 
-function resolveVariant(offer: OfferForShipping, variantId: string | null | undefined) {
+function resolveVariant(offer: OfferForShipping, variantId: string | null | undefined, quantity: number) {
   if (offer.variants.length > 0) {
     const id = sanitizeText(variantId ?? "", 120);
     if (!id) return new ShippingQuoteError("variant_required", 400, "Selecione uma variante disponivel.");
     const variant = offer.variants.find((item) => item.id === id);
     if (!variant || variant.offerId !== offer.id || variant.availability === "REMOVED") {
       return new ShippingQuoteError("variant_unavailable", 400, "Selecione uma variante disponivel.");
+    }
+    if (!variantIsPurchasable(variant, quantity)) {
+      return new ShippingQuoteError("variant_unavailable", 409, "Variante indisponivel.");
     }
     return variant;
   }
@@ -207,6 +213,19 @@ function manualReason(offer: OfferForShipping): Extract<ShippingQuoteResult, { t
     return { type: "manual", reason: "shipping_not_configured", message: "Esta compra precisa de atendimento para confirmar o frete." };
   }
   return null;
+}
+
+function offerIsPurchasable(offer: OfferForShipping, quantity: number) {
+  if (offer.variants.length > 0) return true;
+  if (offer.availability === "PREORDER") return true;
+  if (offer.availability !== "AVAILABLE") return false;
+  return offer.stockQuantity >= quantity;
+}
+
+function variantIsPurchasable(variant: OfferForShipping["variants"][number], quantity: number) {
+  if (variant.availability === "PREORDER") return true;
+  if (variant.availability !== "AVAILABLE") return false;
+  return variant.stock >= quantity;
 }
 
 function buildAdapterInput(

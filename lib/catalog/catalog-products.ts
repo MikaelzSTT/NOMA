@@ -81,7 +81,10 @@ export async function upsertCatalogProductInTransaction(
       variants: {
         select: {
           sku: true,
+          attributes: true,
           salePrice: true,
+          active: true,
+          availability: true,
           manualPriceOverride: true,
         },
       },
@@ -185,7 +188,7 @@ export async function upsertCatalogProductInTransaction(
   }));
   const offerVariants = parsed.variants.map((variant, index) => {
     const costPrice = variant.costPrice ?? parsed.costPrice ?? 0;
-    const existingVariant = existingOffer?.variants.find((item) => item.sku && item.sku === variant.sku);
+    const existingVariant = existingOffer?.variants.find((item) => variantMatchesExistingOfferVariant(item, variant));
     const variantManualOverride = manualPriceOverride || Boolean(existingVariant?.manualPriceOverride);
     const salePrice = variantManualOverride
       ? hasExplicitManualPrice
@@ -194,6 +197,7 @@ export async function upsertCatalogProductInTransaction(
       : market === "BR" && costPrice > 0
         ? calculateNomaBrSalePrice({ costPrice, compareAtPrice }).salePrice
         : variant.sellingPrice ?? sellingPrice ?? 0;
+    const availability = variant.availability ?? (variant.stock > 0 ? "AVAILABLE" as const : "OUT_OF_STOCK" as const);
     return {
       label: variant.title,
       sku: variant.sku,
@@ -205,8 +209,8 @@ export async function upsertCatalogProductInTransaction(
       salePrice,
       compareAtPrice,
       stock: variant.stock,
-      active: variant.active ?? true,
-      availability: variant.stock > 0 ? "AVAILABLE" as const : "OUT_OF_STOCK" as const,
+      active: importedVariantIsActive(variant, existingVariant),
+      availability,
       sourceUrl: parsed.sourceUrl,
       imageUrl: null,
       isDefault: index === 0,
@@ -338,6 +342,39 @@ export async function upsertCatalogProductInTransaction(
     });
   }
   return { ...savedProduct, slug: savedOffer.slug, offerId: savedOffer.id };
+}
+
+type ExistingOfferVariant = {
+  sku: string | null;
+  attributes: Prisma.JsonValue;
+  salePrice: Prisma.Decimal | number;
+  active: boolean;
+  availability: string;
+  manualPriceOverride: boolean;
+};
+
+function importedVariantIsActive(
+  variant: NormalizedSupplierProduct["variants"][number],
+  existingVariant: ExistingOfferVariant | undefined,
+) {
+  if (existingVariant?.active === false) return false;
+  if (variant.availability === "REMOVED") return false;
+  if (variant.active === false && variant.availability !== "OUT_OF_STOCK" && variant.stock > 0) return false;
+  return true;
+}
+
+function variantMatchesExistingOfferVariant(
+  existing: ExistingOfferVariant,
+  incoming: NormalizedSupplierProduct["variants"][number],
+) {
+  if (existing.sku && incoming.sku && existing.sku === incoming.sku) return true;
+  if (!incoming.supplierVariantId) return false;
+  const attributes = publicJsonRecord(existing.attributes);
+  return attributes.supplierVariantId === incoming.supplierVariantId;
+}
+
+function publicJsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 async function availableSlug(

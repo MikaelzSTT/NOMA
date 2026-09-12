@@ -20,6 +20,7 @@ export const normalizedVariantSchema = z.object({
   sellingPrice: finiteMoney.optional(),
   stock: z.number().int().nonnegative(),
   active: z.boolean().default(true),
+  availability: z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN", "REMOVED"]).optional(),
 });
 
 export const normalizedSupplierProductSchema = z.object({
