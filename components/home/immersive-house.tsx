@@ -47,6 +47,7 @@ class SceneErrorBoundary extends Component<
 
 export function ImmersiveHouse() {
   const sectionRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef(0);
   const activeRoomRef = useRef(0);
@@ -125,7 +126,8 @@ export function ImmersiveHouse() {
 
   useEffect(() => {
     const section = sectionRef.current;
-    if (!section) return;
+    const stage = stageRef.current;
+    if (!section || !stage) return;
 
     let frame = 0;
 
@@ -148,7 +150,7 @@ export function ImmersiveHouse() {
       }
 
       const rect = section.getBoundingClientRect();
-      const distance = Math.max(section.offsetHeight - window.innerHeight, 1);
+      const distance = Math.max(section.offsetHeight - stage.offsetHeight, 1);
       const progress = clamp(-rect.top / distance);
       const nextRoom = progress < 0.36 ? 0 : progress < 0.7 ? 1 : 2;
 
@@ -213,7 +215,7 @@ export function ImmersiveHouse() {
       ref={sectionRef}
       id="inicio"
     >
-      <div className={styles.houseStage}>
+      <div className={styles.houseStage} ref={stageRef}>
         <div className={styles.sceneFallback}>
           {fallbackEnabled ? (
             <Image

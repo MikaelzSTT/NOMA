@@ -316,7 +316,11 @@
   position: sticky;
   top: 0;
   height: 100vh;
-  height: 100dvh;
+  /*
+   * Keep the 3D render surface at Chrome's expanded viewport height. Unlike
+   * dvh, lvh does not resize while the mobile browser chrome retracts.
+   */
+  height: 100lvh;
   overflow: hidden;
   background: #26251f;
   color: #fff;
@@ -2449,7 +2453,7 @@
 
   .houseScroll {
     height: 100vh;
-    height: 100dvh;
+    height: 100lvh;
   }
 
   .houseStage {
