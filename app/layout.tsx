@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Manrope } from "next/font/google";
+import { headers } from "next/headers";
+import { MARKET_CONFIG, marketFromPath } from "@/lib/market";
 import { absoluteUrl } from "@/lib/utils";
 import "./globals.css";
 
@@ -37,10 +39,14 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "Noma", description: "Móveis e interiores para uma vida mais presente.", images: ["/images/noma/living-room.webp"] },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const requestHeaders = await headers();
+  const market = marketFromPath(requestHeaders.get("x-noma-original-pathname") ?? "");
+  const lang = market ? MARKET_CONFIG[market].locale : "pt-BR";
+
   return (
     <html
-      lang="pt-BR"
+      lang={lang}
       className={`${geistSans.variable} ${geistMono.variable} ${display.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">{children}</body>
