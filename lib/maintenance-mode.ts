@@ -15,7 +15,8 @@ const BYPASS_PREFIXES = [
 
 const BYPASS_EXACT_PATHS = new Set([
   "/favicon.ico",
-  "/icon.svg",
+  "/icon.png",
+  "/apple-icon.png",
   "/manifest.webmanifest",
   "/robots.txt",
   "/sitemap.xml",
