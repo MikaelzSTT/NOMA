@@ -49,6 +49,7 @@
   transition:
     opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
     visibility 700ms step-end;
+  pointer-events: none;
 }
 
 .entryGate[data-phase="leaving"] {
@@ -945,6 +946,16 @@
   transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.storeProductImage:not([data-css-image])::before {
+  content: none;
+}
+
+.storeProductImage img {
+  object-fit: cover;
+  object-position: center;
+  transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .storeImageBadges {
   position: absolute;
   z-index: 2;
@@ -1201,7 +1212,8 @@
   transform: translateY(-3px);
 }
 
-.storeProductCard:hover .storeProductImage::before {
+.storeProductCard:hover .storeProductImage::before,
+.storeProductCard:hover .storeProductImage img {
   transform: scale(1.035);
 }
 

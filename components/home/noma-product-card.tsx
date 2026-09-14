@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Heart, ShieldCheck, Truck } from "lucide-react";
 import type { CatalogProduct } from "@/lib/catalog";
@@ -8,6 +9,7 @@ import styles from "./noma-home.module.css";
 
 export function NomaProductCard({ product, market, index = 0 }: { product: CatalogProduct; market: Market; index?: number }) {
   const image = product.images[0];
+  const useSprite = image?.url === "/images/noma/products.webp";
   const config = MARKET_CONFIG[market];
   const isUS = market === "US";
   const discountLabel = getDiscountLabel(product.sellingPrice, product.compareAtPrice, product.discountPercent);
@@ -26,17 +28,30 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
       <Link className={styles.storeProductLink} href={href} aria-label={`${isUS ? "View" : "Ver"} ${product.title}`}>
         <div
           className={styles.storeProductImage}
-          role="img"
-          aria-label={image?.alt ?? product.title}
+          data-css-image={useSprite ? "true" : undefined}
+          role={useSprite ? "img" : undefined}
+          aria-label={useSprite ? (image?.alt ?? product.title) : undefined}
           style={
-            {
-              "--product-image": `url("${image?.url ?? ""}")`,
-              "--product-x": image?.url === "/images/noma/products.webp" ? `${Number(product.attributes.spriteColumn ?? 0) * 50}%` : "center",
-              "--product-y": image?.url === "/images/noma/products.webp" ? `${Number(product.attributes.spriteRow ?? 0) * 100}%` : "center",
-              "--product-size": image?.url === "/images/noma/products.webp" ? "300% 200%" : "cover",
-            } as CSSProperties
+            useSprite
+              ? ({
+                  "--product-image": `url("${image.url}")`,
+                  "--product-x": `${Number(product.attributes.spriteColumn ?? 0) * 50}%`,
+                  "--product-y": `${Number(product.attributes.spriteRow ?? 0) * 100}%`,
+                  "--product-size": "300% 200%",
+                } as CSSProperties)
+              : undefined
           }
         >
+          {!useSprite && image?.url ? (
+            <Image
+              src={image.url}
+              alt={image.alt ?? product.title}
+              fill
+              sizes="(max-width: 720px) 84vw, (max-width: 1180px) 31vw, 18vw"
+              quality={58}
+              loading="lazy"
+            />
+          ) : null}
           {(discountLabel || badge) && (
             <div className={styles.storeImageBadges}>
               {discountLabel && <span className={styles.storeDiscount}>{discountLabel}</span>}

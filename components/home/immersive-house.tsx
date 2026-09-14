@@ -57,10 +57,11 @@ export function ImmersiveHouse() {
   const [sceneActive, setSceneActive] = useState(true);
   const [sceneEnabled, setSceneEnabled] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
-  const [fallbackEnabled, setFallbackEnabled] = useState(false);
+  const [sceneAbandoned, setSceneAbandoned] = useState(false);
+  const [mobileLite, setMobileLite] = useState(false);
   const completionRef = useRef(false);
   const fallbackLockedRef = useRef(false);
-  const fallbackReasonRef = useRef<NomaHeroReadyDetail["reason"]>("scene-error");
+  const sceneStartedRef = useRef(false);
 
   const finishEntry = useCallback((detail: NomaHeroReadyDetail) => {
     if (completionRef.current) return;
@@ -69,47 +70,87 @@ export function ImmersiveHouse() {
   }, []);
 
   const activateFallback = useCallback((reason: NonNullable<NomaHeroReadyDetail["reason"]>) => {
-    if (completionRef.current) return;
     fallbackLockedRef.current = true;
-    fallbackReasonRef.current = reason;
     setSceneEnabled(false);
-    setFallbackEnabled(true);
-  }, []);
+    setSceneReady(false);
+    setSceneAbandoned(true);
+    finishEntry({ mode: "fallback", reason });
+  }, [finishEntry]);
 
   useEffect(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const compactViewport = window.matchMedia("(max-width: 820px)");
-    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    const testCanvas = document.createElement("canvas");
-    const supportsWebGl = Boolean(
-      window.WebGLRenderingContext &&
-        (testCanvas.getContext("webgl2") || testCanvas.getContext("webgl")),
-    );
 
     const updatePreferences = () => {
       setCompact(compactViewport.matches);
       setReducedMotion(reduceMotion.matches);
-      if (fallbackLockedRef.current) return;
-      if (!supportsWebGl) {
-        activateFallback("unsupported");
-      } else if (connection?.saveData) {
-        activateFallback("save-data");
-      } else {
-        setSceneEnabled(true);
-      }
+      setMobileLite(compactViewport.matches || window.devicePixelRatio > 1.5);
     };
 
-    const initialFrame = window.requestAnimationFrame(updatePreferences);
-
+    updatePreferences();
     reduceMotion.addEventListener("change", updatePreferences);
     compactViewport.addEventListener("change", updatePreferences);
 
     return () => {
-      window.cancelAnimationFrame(initialFrame);
       reduceMotion.removeEventListener("change", updatePreferences);
       compactViewport.removeEventListener("change", updatePreferences);
     };
-  }, [activateFallback]);
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion || sceneAbandoned || sceneStartedRef.current) {
+      if (reducedMotion) finishEntry({ mode: "fallback", reason: "unsupported" });
+      return;
+    }
+
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (connection?.saveData) {
+      const saveDataTimer = window.setTimeout(() => activateFallback("save-data"), 0);
+      return () => window.clearTimeout(saveDataTimer);
+    }
+
+    let cancelled = false;
+    let interactionTimer = 0;
+    const cleanupFns: Array<() => void> = [];
+
+    const supportsWebGl = () => {
+      const testCanvas = document.createElement("canvas");
+      try {
+        const context = window.WebGLRenderingContext && (
+          testCanvas.getContext("webgl2", { failIfMajorPerformanceCaveat: true }) ||
+          testCanvas.getContext("webgl", { failIfMajorPerformanceCaveat: true })
+        );
+        return Boolean(context);
+      } catch {
+        return false;
+      }
+    };
+
+    const startScene = () => {
+      if (cancelled || sceneStartedRef.current || fallbackLockedRef.current) return;
+      if (!supportsWebGl()) {
+        activateFallback("unsupported");
+        return;
+      }
+      sceneStartedRef.current = true;
+      setSceneEnabled(true);
+    };
+
+    const onInteraction = () => {
+      interactionTimer = window.setTimeout(startScene, 450);
+    };
+
+    ["pointerdown", "keydown", "touchstart", "wheel"].forEach((eventName) => {
+      window.addEventListener(eventName, onInteraction, { once: true, passive: true });
+      cleanupFns.push(() => window.removeEventListener(eventName, onInteraction));
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(interactionTimer);
+      cleanupFns.forEach((cleanup) => cleanup());
+    };
+  }, [activateFallback, finishEntry, reducedMotion, sceneAbandoned]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -187,7 +228,7 @@ export function ImmersiveHouse() {
 
   useEffect(() => {
     if (!sceneEnabled || sceneReady) return;
-    const timeout = window.setTimeout(() => activateFallback("scene-timeout"), 9_000);
+    const timeout = window.setTimeout(() => activateFallback("scene-timeout"), 6_000);
     return () => window.clearTimeout(timeout);
   }, [activateFallback, sceneEnabled, sceneReady]);
 
@@ -196,15 +237,6 @@ export function ImmersiveHouse() {
     const reveal = window.setTimeout(() => finishEntry({ mode: "3d" }), 180);
     return () => window.clearTimeout(reveal);
   }, [finishEntry, sceneReady]);
-
-  useEffect(() => {
-    if (!fallbackEnabled) return;
-    const reveal = window.setTimeout(
-      () => finishEntry({ mode: "fallback", reason: fallbackReasonRef.current }),
-      1_200,
-    );
-    return () => window.clearTimeout(reveal);
-  }, [fallbackEnabled, finishEntry]);
 
   const room = rooms[activeRoom];
   return (
@@ -217,28 +249,29 @@ export function ImmersiveHouse() {
     >
       <div className={styles.houseStage} ref={stageRef}>
         <div className={styles.sceneFallback}>
-          {fallbackEnabled ? (
-            <Image
-              src="/images/noma/living-room.webp"
-              alt="Sala contemporânea Noma em tons naturais"
-              fill
-              sizes="(max-aspect-ratio: 3/4) 178vh, 100vw"
-              onLoad={() => finishEntry({ mode: "fallback", reason: fallbackReasonRef.current })}
-              onError={() => finishEntry({ mode: "fallback", reason: fallbackReasonRef.current })}
-            />
-          ) : null}
+          <Image
+            src="/images/noma/living-room.webp"
+            alt="Sala contemporânea Noma em tons naturais"
+            fill
+            priority
+            sizes="100vw"
+            onLoad={() => finishEntry({ mode: "fallback" })}
+            onError={() => finishEntry({ mode: "fallback", reason: "scene-error" })}
+          />
         </div>
 
         <div className={styles.sceneCanvas} aria-hidden="true">
-          {sceneEnabled ? (
+          {sceneEnabled && !sceneAbandoned ? (
             <SceneErrorBoundary onError={() => activateFallback("scene-error")}>
               <ShowroomScene
-                active={sceneActive}
+                active={sceneActive && !sceneAbandoned}
                 activeRoom={activeRoom}
                 compact={compact}
+                mobileLite={mobileLite}
                 progress={progressRef}
                 reducedMotion={reducedMotion}
                 onReady={() => setSceneReady(true)}
+                onFail={activateFallback}
               />
             </SceneErrorBoundary>
           ) : null}

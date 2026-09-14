@@ -31,10 +31,12 @@ import {
 type ShowroomSceneProps = {
   active?: boolean;
   compact: boolean;
+  mobileLite?: boolean;
   activeRoom: number;
   progress: { current: number };
   reducedMotion?: boolean;
   onReady: () => void;
+  onFail: (reason: "scene-error" | "scene-timeout") => void;
 };
 
 type VectorTuple = [number, number, number];
@@ -717,12 +719,14 @@ function WindowLight({
   color,
   intensity,
   compact,
+  mobileLite,
 }: {
   position: VectorTuple;
   targetPosition: VectorTuple;
   color: string;
   intensity: number;
   compact: boolean;
+  mobileLite: boolean;
 }) {
   const target = useMemo(() => new Object3D(), []);
 
@@ -738,9 +742,9 @@ function WindowLight({
         decay={2}
         angle={0.72}
         penumbra={0.92}
-        castShadow
-        shadow-mapSize-width={compact ? 256 : 512}
-        shadow-mapSize-height={compact ? 256 : 512}
+        castShadow={!mobileLite}
+        shadow-mapSize-width={compact ? 128 : 512}
+        shadow-mapSize-height={compact ? 128 : 512}
         shadow-camera-near={0.6}
         shadow-camera-far={18}
         shadow-bias={-0.00012}
@@ -751,7 +755,7 @@ function WindowLight({
   );
 }
 
-function Lighting({ compact }: { compact: boolean }) {
+function Lighting({ compact, mobileLite }: { compact: boolean; mobileLite: boolean }) {
   return (
     <>
       <ambientLight intensity={0.07} color="#eadfd1" />
@@ -760,9 +764,9 @@ function Lighting({ compact }: { compact: boolean }) {
         position={[-7, 12, 11]}
         intensity={2.25}
         color="#ffedda"
-        castShadow
-        shadow-mapSize-width={compact ? 512 : 1024}
-        shadow-mapSize-height={compact ? 512 : 1024}
+        castShadow={!mobileLite}
+        shadow-mapSize-width={compact ? 256 : 1024}
+        shadow-mapSize-height={compact ? 256 : 1024}
         shadow-camera-left={-12}
         shadow-camera-right={12}
         shadow-camera-top={15}
@@ -779,6 +783,7 @@ function Lighting({ compact }: { compact: boolean }) {
         color="#dce9e5"
         intensity={42}
         compact={compact}
+        mobileLite={mobileLite}
       />
       <WindowLight
         position={[7.75, 5.05, -11.7]}
@@ -786,6 +791,7 @@ function Lighting({ compact }: { compact: boolean }) {
         color="#f5dfc4"
         intensity={46}
         compact={compact}
+        mobileLite={mobileLite}
       />
       <WindowLight
         position={[-3.8, 5.8, -21.6]}
@@ -793,6 +799,7 @@ function Lighting({ compact }: { compact: boolean }) {
         color="#f8e5cb"
         intensity={31}
         compact={compact}
+        mobileLite={mobileLite}
       />
       <rectAreaLight position={[-8.1, 3.25, 0]} rotation={[0, Math.PI / 2, 0]} width={9} height={4.5} intensity={5.2} color="#d5e1da" />
       <rectAreaLight position={[8.1, 3.2, -11.5]} rotation={[0, -Math.PI / 2, 0]} width={7} height={4} intensity={4.3} color="#f3dfc8" />
@@ -822,17 +829,18 @@ function SceneReady({ onReady }: Pick<ShowroomSceneProps, "onReady">) {
 
 function Showroom({
   compact,
+  mobileLite = false,
   progress,
   reducedMotion,
   renderSecondaryRooms,
-}: Pick<ShowroomSceneProps, "compact" | "progress" | "reducedMotion"> & {
+}: Pick<ShowroomSceneProps, "compact" | "mobileLite" | "progress" | "reducedMotion"> & {
   renderSecondaryRooms: boolean;
 }) {
   return (
     <SurfaceMaterialLibrary>
       <color attach="background" args={["#aaa296"]} />
       <fog attach="fog" args={["#aaa296", 28, 62]} />
-      <Lighting compact={compact} />
+      <Lighting compact={compact} mobileLite={mobileLite} />
       <ArchitecturalShell />
       <LivingRoom compact={compact} />
       {renderSecondaryRooms ? (
@@ -841,7 +849,7 @@ function Showroom({
           <Kitchen compact={compact} />
         </>
       ) : null}
-      {!compact ? (
+      {!compact && !mobileLite ? (
         <>
           <ContactShadows
             position={[0, 0.025, 1.5]}
@@ -884,13 +892,15 @@ function Showroom({
 export function ShowroomScene({
   active = true,
   compact,
+  mobileLite = false,
   activeRoom,
   progress,
   reducedMotion = false,
   onReady,
+  onFail,
 }: ShowroomSceneProps) {
   const [renderSecondaryRooms, setRenderSecondaryRooms] = useState(false);
-  const dpr: [number, number] = compact ? [1, 1.5] : [1, 1.75];
+  const dpr: [number, number] = mobileLite ? [1, 1.15] : compact ? [1, 1.25] : [1, 1.6];
   const shouldRenderSecondaryRooms = renderSecondaryRooms || activeRoom > 0;
 
   useEffect(() => {
@@ -907,28 +917,33 @@ export function ShowroomScene({
       return () => cancelIdle(idleCallback);
     }
 
-    const timeout = globalThis.setTimeout(() => setRenderSecondaryRooms(true), 1200);
+    const timeout = globalThis.setTimeout(() => setRenderSecondaryRooms(true), mobileLite ? 2200 : 1200);
     return () => globalThis.clearTimeout(timeout);
-  }, [renderSecondaryRooms]);
+  }, [mobileLite, renderSecondaryRooms]);
 
   return (
     <Canvas
       camera={{ fov: compact ? 48 : 39, near: 0.1, far: 82, position: [compact ? 7.7 : 8.65, compact ? 3.1 : 2.95, 18] }}
       dpr={dpr}
-      shadows="percentage"
+      shadows={mobileLite ? false : "percentage"}
       frameloop={active && !reducedMotion ? "always" : "demand"}
-      gl={{ antialias: true, alpha: false, powerPreference: "high-performance", stencil: false }}
+      gl={{ antialias: !mobileLite, alpha: false, powerPreference: mobileLite ? "default" : "high-performance", stencil: false }}
       performance={{ min: 0.55, max: 1, debounce: 260 }}
       onCreated={({ gl, scene }) => {
+        gl.domElement.addEventListener("webglcontextlost", (event) => {
+          event.preventDefault();
+          onFail("scene-error");
+        }, { once: true });
         gl.outputColorSpace = SRGBColorSpace;
         gl.toneMapping = ACESFilmicToneMapping;
         gl.toneMappingExposure = compact ? 0.96 : 1;
         scene.background = new Color("#aaa296");
       }}
+      onError={() => onFail("scene-error")}
     >
-      <Showroom compact={compact} progress={progress} reducedMotion={reducedMotion} renderSecondaryRooms={shouldRenderSecondaryRooms} />
+      <Showroom compact={compact} mobileLite={mobileLite} progress={progress} reducedMotion={reducedMotion} renderSecondaryRooms={shouldRenderSecondaryRooms} />
       <SceneReady onReady={onReady} />
-      <AdaptiveDpr />
+      {!mobileLite ? <AdaptiveDpr /> : null}
     </Canvas>
   );
 }
