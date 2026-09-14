@@ -2,10 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, MoveRight } from "lucide-react";
 import { HomeFooter } from "@/components/home/home-footer";
-import { HomeEntryGate } from "@/components/home/home-entry-gate";
 import { HomeHeader } from "@/components/home/home-header";
 import { HomeMotion } from "@/components/home/home-motion";
-import { ImmersiveHouse } from "@/components/home/immersive-house";
 import { NomaProductCard } from "@/components/home/noma-product-card";
 import styles from "@/components/home/noma-home.module.css";
 import { getHomeData } from "@/lib/catalog";
@@ -70,11 +68,44 @@ export async function NomaHomePage({ market }: { market: Market }) {
   const showCategoryRail = categories.length >= 3;
 
   return (
-      <div className={`noma-home ${styles.home}`} data-noma-home>
-      <HomeEntryGate />
+    <div className={`noma-home ${styles.home}`} data-noma-home>
       <HomeMotion />
       <HomeHeader market={market} />
-      <ImmersiveHouse />
+
+      {/* 3D showroom preserved in project for future reuse. */}
+      <section className={styles.staticHero} id="inicio" aria-labelledby="noma-hero-title">
+        <div className={styles.staticHeroStage}>
+          <div className={styles.staticHeroImage} aria-hidden="true">
+            <Image
+              src="/images/noma/living-room.webp"
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+            />
+          </div>
+          <div className={styles.houseShade} />
+          <div className={styles.filmGrain} />
+
+          <div className={styles.heroContent}>
+            <p className={styles.heroEyebrow}>Interiores · Mobiliário · Planejados</p>
+            <h1 id="noma-hero-title">
+              Design em <em>escala real.</em>
+            </h1>
+            <p className={styles.heroIntro}>
+              Ambientes completos, materiais honestos e peças que fazem a casa respirar no ritmo de quem vive nela.
+            </p>
+            <div className={styles.heroActions}>
+              <Link href="#ambientes" className={styles.lightButton}>
+                Explorar ambientes <ArrowRight aria-hidden="true" size={17} />
+              </Link>
+              <Link href="#colecao-produtos" className={styles.ghostButton}>
+                Ver coleção
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className={styles.productsSection} id="colecao-produtos">
         <div className={styles.shell}>

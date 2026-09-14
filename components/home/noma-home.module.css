@@ -313,6 +313,22 @@
   background: #26251f;
 }
 
+.staticHero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100lvh;
+  background: #26251f;
+  color: #fff;
+}
+
+.staticHeroStage {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100lvh;
+  overflow: hidden;
+  background: #26251f;
+}
+
 .houseStage {
   position: sticky;
   top: 0;
@@ -342,6 +358,18 @@
 }
 
 .sceneFallback img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.staticHeroImage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #6e6a61;
+}
+
+.staticHeroImage img {
   object-fit: cover;
   object-position: center;
 }
@@ -1995,7 +2023,8 @@
     width: 2.2rem;
   }
 
-  .sceneFallback img {
+  .sceneFallback img,
+  .staticHeroImage img {
     object-position: 60% center;
   }
 
