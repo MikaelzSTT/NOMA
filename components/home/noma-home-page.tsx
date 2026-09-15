@@ -4,6 +4,7 @@ import { ArrowRight, ArrowUpRight, MoveRight } from "lucide-react";
 import { HomeFooter } from "@/components/home/home-footer";
 import { HomeHeader } from "@/components/home/home-header";
 import { HomeMotion } from "@/components/home/home-motion";
+import { MobileHeroVideo } from "@/components/home/mobile-hero-video";
 import { NomaProductCard } from "@/components/home/noma-product-card";
 import styles from "@/components/home/noma-home.module.css";
 import { getHomeData } from "@/lib/catalog";
@@ -84,6 +85,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
               sizes="100vw"
             />
           </div>
+          <MobileHeroVideo />
           <div className={styles.houseShade} />
           <div className={styles.filmGrain} />
 

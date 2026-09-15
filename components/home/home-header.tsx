@@ -91,7 +91,11 @@ export function HomeHeader({
 
         <div className={styles.headerActions} aria-label="Ações rápidas">
           <MarketSwitcher market={market} className={styles.marketSelect} />
-          <Link href={searchPath(market)} aria-label={isUS ? "Search" : "Pesquisar"} className={styles.headerIcon}>
+          <Link
+            href={searchPath(market)}
+            aria-label={isUS ? "Search" : "Pesquisar"}
+            className={`${styles.headerIcon} ${styles.primaryHeaderAction}`}
+          >
             <Search aria-hidden="true" size={18} />
           </Link>
           <button type="button" aria-label={isUS ? "My account" : "Minha conta"} className={styles.headerIcon}>
@@ -124,7 +128,21 @@ export function HomeHeader({
             </Link>
           ))}
         </nav>
-        <p>{isUS ? "Interiors, furniture, and custom millwork." : "Interiores, mobiliário e marcenaria sob medida."}</p>
+        <div className={styles.mobileMenuFooter}>
+          <div className={styles.mobileMenuUtilities} aria-label={isUS ? "Quick actions" : "Ações rápidas"}>
+            <MarketSwitcher market={market} className={styles.mobileMenuMarket} />
+            <div className={styles.mobileMenuUtilityGroup}>
+              <button type="button" aria-label={isUS ? "My account" : "Minha conta"} className={styles.mobileMenuUtility}>
+                <UserRound aria-hidden="true" size={19} />
+              </button>
+              <button type="button" aria-label={isUS ? "Bag, no items" : "Sacola, sem itens"} className={styles.mobileMenuUtility}>
+                <ShoppingBag aria-hidden="true" size={19} />
+                <span className={styles.bagCount}>0</span>
+              </button>
+            </div>
+          </div>
+          <p>{isUS ? "Interiors, furniture, and custom millwork." : "Interiores, mobiliário e marcenaria sob medida."}</p>
+        </div>
       </div>
     </header>
   );
