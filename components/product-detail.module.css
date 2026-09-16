@@ -108,6 +108,12 @@
   object-fit: cover;
 }
 
+.productDetail[data-noma-product-category="moveis"] .gallery,
+.productDetail[data-noma-product-category="moveis"] .galleryMain,
+.productDetail[data-noma-product-category="moveis"] .thumbnail {
+  background: #fff;
+}
+
 .summary {
   align-self: start;
   padding-top: clamp(0.5rem, 3vw, 3rem);

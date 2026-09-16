@@ -33,7 +33,8 @@ const product = {
   supplierProductId: "supplier-url-1",
   sku: "SUP-URL-1",
   title: "Mesa URL",
-  category: "Mesas",
+  category: "Móveis",
+  categorySlug: "moveis",
   images: [{ url: "https://cdn.example/mesa.jpg" }],
   costPrice: 500,
   currency: "BRL",
@@ -76,6 +77,21 @@ describe("upsertCatalogProduct", () => {
       }),
     }));
     expect(mocks.transaction.priceHistory.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.category.upsert).toHaveBeenCalledWith({
+      where: { slug: "moveis" },
+      update: { name: "Móveis" },
+      create: { name: "Móveis", slug: "moveis" },
+    });
+  });
+
+  it("recusa criar uma terceira categoria fora das opções canônicas", async () => {
+    await expect(upsertCatalogProduct(
+      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
+      { ...product, title: "Luminária Aurora", category: "Iluminação", categorySlug: undefined },
+      { market: "BR" },
+    )).rejects.toThrow("Escolha Móveis ou Colchões");
+
+    expect(mocks.transaction.category.upsert).not.toHaveBeenCalled();
   });
 
   it("importa variante existente com stock zero como ativa e indisponível", async () => {

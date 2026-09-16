@@ -69,7 +69,7 @@ describe("updateInternalProductAction", () => {
     formData.set("sourceUrl", "https://example.com/cadeira");
     formData.set("shortDescription", "");
     formData.set("description", "");
-    formData.set("category", "Cadeiras");
+    formData.set("category", "moveis");
     formData.set("subcategory", "");
     formData.set("brand", "");
     formData.set("stock", "4");

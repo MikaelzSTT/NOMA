@@ -20,6 +20,7 @@
     "db:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "sync": "tsx scripts/sync-products.ts",
+    "categories:classify": "tsx scripts/classify-product-categories.ts",
     "admin:hash": "tsx scripts/hash-admin-password.ts"
   },
   "dependencies": {

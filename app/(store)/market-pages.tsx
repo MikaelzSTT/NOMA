@@ -12,6 +12,7 @@ import { ProductDetailPurchase } from "@/components/product-detail-purchase";
 import productStyles from "@/components/product-detail.module.css";
 import { getCategory, getEquivalentProductSlug, getProductBySlug, getRelatedProducts, listProducts } from "@/lib/catalog";
 import { MARKET_CONFIG, categoryPath, collectionsPath, productPath, searchPath, type Market } from "@/lib/market";
+import type { ProductCategorySlug } from "@/lib/product-categories";
 import { parseProductFilters, type RawSearchParams } from "@/lib/search-params";
 import { absoluteUrl } from "@/lib/utils";
 
@@ -69,6 +70,7 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
           productId={product.productId}
           offerId={product.id}
           productSlug={product.slug}
+          categorySlug={product.category.slug as ProductCategorySlug}
           images={product.images}
           name={product.title}
           brandLabel={product.brand?.name ?? product.category.name}

@@ -7,6 +7,7 @@ import { normalizeSourceUrl } from "@/lib/catalog/source-url";
 import { productImageStorageFields } from "@/lib/product-image-storage";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { MANUAL_SUPPLIER_KEY, MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
+import { getProductCategory, type ProductCategorySlug } from "@/lib/product-categories";
 
 export interface ManualProductInput {
   market: Market;
@@ -16,7 +17,7 @@ export interface ManualProductInput {
   slug: string;
   description?: string;
   brand?: string;
-  category: string;
+  category: ProductCategorySlug;
   images: string[];
   costPrice: number;
   sellingPrice: number;
@@ -66,10 +67,11 @@ export async function createManualProduct(input: ManualProductInput) {
     const now = new Date();
     const currency = MARKET_CONFIG[input.market].currency;
     const sourceUrl = normalizeSourceUrl(input.sourceUrl);
+    const categoryDefinition = getProductCategory(input.category);
     const category = await transaction.category.upsert({
-      where: { slug: slugify(input.category) },
-      update: { name: input.category },
-      create: { name: input.category, slug: slugify(input.category) },
+      where: { slug: categoryDefinition.slug },
+      update: { name: categoryDefinition.label },
+      create: { name: categoryDefinition.label, slug: categoryDefinition.slug },
     });
     const brand = input.brand
       ? await transaction.brand.upsert({

@@ -10,6 +10,7 @@ import { previewToOfferVariants } from "@/lib/admin/url-preview-to-variants";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
 import type { ProductUrlImportPreview } from "@/lib/product-import/types";
 import type { ShippingStrategyCode } from "@/lib/shipping/types";
+import { PRODUCT_CATEGORIES, resolveProductCategory, type ProductCategorySlug } from "@/lib/product-categories";
 import { slugify } from "@/lib/utils";
 
 interface SupplierOption {
@@ -44,7 +45,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState<ProductCategorySlug | "">("");
   const [brand, setBrand] = useState("");
   const [description, setDescription] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -96,7 +97,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
     setSourceUrl(nextSourceUrl);
     setProductUrl(nextSourceUrl);
     if (product.title) updateTitle(product.title);
-    if (product.category) setCategory(product.category);
+    setCategory(resolveProductCategory({ title: product.title ?? title, category: product.category }) ?? "");
     if (product.brand) setBrand(product.brand);
     if (product.description) setDescription(product.description);
     if (product.images.length) setImages(product.images.map((image) => image.url));
@@ -152,7 +153,7 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
         <label className="admin-field">Nome<input name="title" value={title} onChange={(event) => updateTitle(event.target.value)} required maxLength={300} /></label>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="admin-field">Slug<input name="slug" value={slug} onChange={(event) => { setSlugTouched(true); setSlug(slugify(event.target.value)); }} required maxLength={180} /></label>
-          <label className="admin-field">Categoria<input name="category" value={category} onChange={(event) => setCategory(event.target.value)} required maxLength={120} /></label>
+          <label className="admin-field">Categoria<select name="category" value={category} onChange={(event) => setCategory(event.target.value as ProductCategorySlug | "")} required><option value="">Selecione</option>{PRODUCT_CATEGORIES.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}</select></label>
           <label className="admin-field">Marca<input name="brand" value={brand} onChange={(event) => setBrand(event.target.value)} maxLength={120} /></label>
         </div>
         <label className="admin-field">Descrição<textarea name="description" rows={6} maxLength={30000} value={description} onChange={(event) => setDescription(event.target.value)} /></label>

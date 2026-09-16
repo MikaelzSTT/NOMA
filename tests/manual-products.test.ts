@@ -34,7 +34,7 @@ const baseInput = {
   title: "Cadeira Lina",
   slug: "cadeira-lina",
   description: "Cadeira em madeira natural.",
-  category: "Cadeiras",
+  category: "moveis" as const,
   images: ["https://cdn.example.com/cadeira.jpg"],
   costPrice: 1200,
   sellingPrice: 2200,

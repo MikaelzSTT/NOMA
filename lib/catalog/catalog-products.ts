@@ -8,6 +8,7 @@ import { MARKET_CONFIG, type Market } from "@/lib/market";
 import { productImageStorageFields } from "@/lib/product-image-storage";
 import { calculateDiscount, slugify } from "@/lib/utils";
 import { normalizedSupplierProductSchema } from "@/lib/validation/catalog-product";
+import { getProductCategory, resolveProductCategory } from "@/lib/product-categories";
 
 interface SupplierIdentity {
   id: string;
@@ -67,11 +68,19 @@ export async function upsertCatalogProductInTransaction(
     sourceUrl: normalizeSourceUrl(product.sourceUrl),
     currency: product.currency || MARKET_CONFIG[market].currency,
   });
-  const categorySlug = parsed.categorySlug ?? slugify(parsed.category);
+  const resolvedCategorySlug = resolveProductCategory({
+    title: parsed.title,
+    category: parsed.category,
+    categorySlug: parsed.categorySlug,
+  });
+  if (!resolvedCategorySlug) {
+    throw new Error(`Categoria não reconhecida para o produto "${parsed.title}". Escolha Móveis ou Colchões.`);
+  }
+  const categoryDefinition = getProductCategory(resolvedCategorySlug);
   const category = await transaction.category.upsert({
-    where: { slug: categorySlug },
-    update: { name: parsed.category },
-    create: { name: parsed.category, slug: categorySlug },
+    where: { slug: categoryDefinition.slug },
+    update: { name: categoryDefinition.label },
+    create: { name: categoryDefinition.label, slug: categoryDefinition.slug },
   });
   const brand = parsed.brand
     ? await transaction.brand.upsert({

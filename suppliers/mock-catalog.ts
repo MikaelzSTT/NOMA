@@ -1,19 +1,18 @@
 import type { NormalizedSupplierProduct } from "@/lib/catalog/supplier-types";
 
 export const MOCK_CATALOG: NormalizedSupplierProduct[] = [
-  mockProduct("noma-sofa-arco", "SOF-ARCO-001", "Sofá Arco", "Estofados", 4966.67, 8940, 8, "Novo", 0, 0, ["Linho areia", "Bouclé natural"]),
-  mockProduct("noma-poltrona-lina", "POL-LINA-001", "Poltrona Lina", "Poltronas", 2377.78, 4280, 5, "Essencial", 1, 0, ["Linho cru", "Couro caramelo"]),
-  mockProduct("noma-mesa-una", "MES-UNA-001", "Mesa Una", "Mesas", 3755.56, 6760, 3, "Edição 02", 2, 0, ["Nogueira", "Carvalho"]),
-  mockProduct("noma-cama-bruma", "CAM-BRUMA-001", "Cama Bruma", "Quarto", 4105.56, 7390, 4, "Novo", 0, 1, ["Casal", "Queen", "King"]),
-  mockProduct("noma-rack-vertice", "RAC-VERT-001", "Rack Vértice", "Sala", 2844.44, 5120, 7, "Nogueira", 1, 1, ["1,80 m", "2,20 m"]),
-  mockProduct("noma-mesa-lume", "MES-LUME-001", "Mesa Lume", "Apoio", 1366.67, 2460, 9, "Travertino", 2, 1, ["Travertino", "Nero Marquina"]),
+  mockProduct("noma-sofa-arco", "SOF-ARCO-001", "Sofá Arco", 4966.67, 8940, 8, "Novo", 0, 0, ["Linho areia", "Bouclé natural"]),
+  mockProduct("noma-poltrona-lina", "POL-LINA-001", "Poltrona Lina", 2377.78, 4280, 5, "Essencial", 1, 0, ["Linho cru", "Couro caramelo"]),
+  mockProduct("noma-mesa-una", "MES-UNA-001", "Mesa Una", 3755.56, 6760, 3, "Edição 02", 2, 0, ["Nogueira", "Carvalho"]),
+  mockProduct("noma-cama-bruma", "CAM-BRUMA-001", "Cama Bruma", 4105.56, 7390, 4, "Novo", 0, 1, ["Casal", "Queen", "King"]),
+  mockProduct("noma-rack-vertice", "RAC-VERT-001", "Rack Vértice", 2844.44, 5120, 7, "Nogueira", 1, 1, ["1,80 m", "2,20 m"]),
+  mockProduct("noma-mesa-lume", "MES-LUME-001", "Mesa Lume", 1366.67, 2460, 9, "Travertino", 2, 1, ["Travertino", "Nero Marquina"]),
 ];
 
 function mockProduct(
   supplierProductId: string,
   sku: string,
   title: string,
-  category: string,
   costPrice: number,
   sellingPrice: number,
   stock: number,
@@ -29,8 +28,8 @@ function mockProduct(
     slug: supplierProductId.replace("noma-", ""),
     shortDescription: `${title} com desenho autoral, materiais naturais e acabamento preciso.`,
     description: `${title} integra a coleção demonstrativa Noma. O registro usa o mesmo modelo definitivo do catálogo e pode ser substituído por dados autorizados de fornecedores.`,
-    category,
-    categorySlug: category.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-"),
+    category: "Móveis",
+    categorySlug: "moveis",
     brand: "Noma",
     images: [{ url: "/images/noma/products.webp", alt: title, isPrimary: true }],
     costPrice,

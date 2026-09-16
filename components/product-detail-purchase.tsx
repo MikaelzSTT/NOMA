@@ -9,6 +9,7 @@ import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
 import type { CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
+import type { ProductCategorySlug } from "@/lib/product-categories";
 import { variantIsSelectable } from "@/lib/product-variants";
 import styles from "./product-detail.module.css";
 
@@ -16,6 +17,7 @@ interface ProductDetailPurchaseProps {
   productId: string;
   offerId: string;
   productSlug: string;
+  categorySlug: ProductCategorySlug;
   images: Array<{ id: string; url: string; alt: string | null }>;
   name: string;
   brandLabel: string;
@@ -42,6 +44,7 @@ export function ProductDetailPurchase({
   productId,
   offerId,
   productSlug,
+  categorySlug,
   images,
   name,
   brandLabel,
@@ -94,6 +97,7 @@ export function ProductDetailPurchase({
       className={styles.productDetail}
       data-noma-product-id={productId}
       data-noma-product-slug={productSlug}
+      data-noma-product-category={categorySlug}
       data-noma-selected-variant-id={selectedVariantId ?? undefined}
     >
       <ProductGallery images={images} name={name} sprite={sprite} featuredImageUrl={variantImageSelected ? selectedVariant?.imageUrl : null} />

@@ -19,6 +19,7 @@ import { encryptSupplierCredentials } from "@/lib/supplier-secrets";
 import { ManualProductError, createManualProduct } from "@/lib/admin/manual-products";
 import { safeProductSupplierSyncLog, safeProductSupplierSyncMessage, syncExistingProductFromSupplier } from "@/lib/admin/product-supplier-sync";
 import { SHIPPING_STRATEGIES } from "@/lib/shipping/types";
+import { getProductCategory, PRODUCT_CATEGORY_SLUGS } from "@/lib/product-categories";
 
 export interface LoginState { error?: string }
 
@@ -119,7 +120,7 @@ const createManualProductSchema = z.object({
   slug: z.string().trim().min(2).max(180).transform(slugify).refine((value) => value.length >= 2),
   description: z.string().trim().max(30_000).optional(),
   brand: z.string().trim().max(120).optional(),
-  category: z.string().trim().min(2).max(120),
+  category: z.enum(PRODUCT_CATEGORY_SLUGS),
   images: z.array(imageUrl).min(1).max(30),
   costPrice: requiredMoney,
   sellingPrice: requiredMoney,
@@ -172,7 +173,7 @@ const editProductSchema = z.object({
   sourceUrl: sourceUrl.optional(),
   shortDescription: z.string().trim().max(800).optional(),
   description: z.string().trim().max(30_000).optional(),
-  category: z.string().trim().min(2).max(120),
+  category: z.enum(PRODUCT_CATEGORY_SLUGS),
   subcategory: z.string().trim().max(120).optional(),
   brand: z.string().trim().max(120).optional(),
   costPrice: optionalMoney,
@@ -222,7 +223,7 @@ export async function updateInternalProductAction(formData: FormData) {
   const {
     id,
     market,
-    category: categoryName,
+    category: categorySlug,
     brand: brandName,
     images,
     variants: offerVariants,
@@ -235,7 +236,7 @@ export async function updateInternalProductAction(formData: FormData) {
   const defaultVariant = pricedOfferVariants.find((variant) => variant.isDefault) ?? pricedOfferVariants[0];
   const manualPriceOverride = pricedOfferVariants.some((variant) => variant.manualPriceOverride);
   const [category, brand] = await Promise.all([
-    db.category.upsert({ where: { slug: slugify(categoryName) }, update: { name: categoryName }, create: { name: categoryName, slug: slugify(categoryName) } }),
+    db.category.upsert({ where: { slug: categorySlug }, update: { name: getProductCategory(categorySlug).label }, create: { name: getProductCategory(categorySlug).label, slug: categorySlug } }),
     brandName ? db.brand.upsert({ where: { slug: slugify(brandName) }, update: { name: brandName }, create: { name: brandName, slug: slugify(brandName) } }) : null,
   ]);
   const sellingPrice = defaultVariant.salePrice;

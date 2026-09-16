@@ -10,6 +10,7 @@ import { toAdminOfferVariants } from "@/lib/admin/offer-variant-mapper";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, MARKETS, isMarket, type Market } from "@/lib/market";
+import { PRODUCT_CATEGORIES } from "@/lib/product-categories";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -37,7 +38,7 @@ const productEditSelect = {
   syncStatus: true,
   lastSyncedAt: true,
   supplier: { select: { name: true, adapterKey: true } },
-  category: { select: { name: true } },
+  category: { select: { name: true, slug: true } },
   brand: { select: { name: true } },
   images: { select: { url: true }, orderBy: { position: "asc" as const } },
   offers: {
@@ -146,7 +147,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
         <section className="admin-panel space-y-4">
           <h2>Conteúdo</h2>
           <label className="admin-field">Título<input name="title" defaultValue={editTitle} required maxLength={300} /></label>
-          <div className="grid gap-4 sm:grid-cols-3"><label className="admin-field">Categoria<input name="category" defaultValue={product.category.name} required /></label><label className="admin-field">Subcategoria<input name="subcategory" defaultValue={product.subcategory ?? ""} /></label><label className="admin-field">Marca<input name="brand" defaultValue={product.brand?.name ?? ""} /></label></div>
+          <div className="grid gap-4 sm:grid-cols-3"><label className="admin-field">Categoria<select name="category" defaultValue={product.category.slug} required>{PRODUCT_CATEGORIES.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}</select></label><label className="admin-field">Subcategoria<input name="subcategory" defaultValue={product.subcategory ?? ""} /></label><label className="admin-field">Marca<input name="brand" defaultValue={product.brand?.name ?? ""} /></label></div>
           <label className="admin-field">URL original do produto<input name="sourceUrl" type="url" defaultValue={selectedOffer?.sourceUrl ?? product.sourceUrl ?? ""} /></label>
           <label className="admin-field">Descrição curta<textarea name="shortDescription" rows={2} defaultValue={editShortDescription} maxLength={800} /></label>
           <label className="admin-field">Descrição completa<textarea name="description" rows={6} defaultValue={editDescription} maxLength={30000} /></label>

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Calculator, CheckSquare, FileSpreadsheet, Link2, ListChecks, ListPlus, LoaderCircle, Upload } from "lucide-react";
 import { calculateGrossMargin, calculateNomaBrSalePrice } from "@/lib/catalog/pricing";
 import { MARKET_CONFIG, MARKETS, type Market } from "@/lib/market";
+import { PRODUCT_CATEGORIES, resolveProductCategory, type ProductCategorySlug } from "@/lib/product-categories";
 
 type SupplierOption = { id: string; name: string; supportedMarkets: Market[] };
 type Mapping = Record<string, string>;
@@ -274,7 +275,7 @@ function ProductPreviewEditor({ product, heading, onChange }: { product: Editabl
     </div>
     <div className="grid gap-4 sm:grid-cols-2">
       <TextField label="Título" value={product.title} onChange={(value) => patch("title", value)} />
-      <TextField label="Categoria" value={product.category} onChange={(value) => patch("category", value)} />
+      <CategoryField value={product.category} onChange={(value) => onChange({ ...product, category: value, categorySlug: value })} />
       <TextField label="Subcategoria" value={product.subcategory ?? ""} onChange={(value) => patch("subcategory", value)} />
       <TextField label="Marca" value={product.brand ?? ""} onChange={(value) => patch("brand", value)} />
       <NumberField label="Custo do fornecedor" value={product.costPrice} onChange={(value) => patch("costPrice", value)} />
@@ -341,10 +342,13 @@ function JobStatus({ job }: { job: Job }) {
 function coercePreviewProduct(value: unknown): EditableProduct | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const product = value as EditableProduct;
-  return typeof product.title === "string" && typeof product.sku === "string" ? product : null;
+  if (typeof product.title !== "string" || typeof product.sku !== "string") return null;
+  const category = resolveProductCategory({ title: product.title, category: product.category, categorySlug: product.categorySlug });
+  return { ...product, category: category ?? "", categorySlug: category ?? undefined };
 }
 
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="admin-field">{label}<input value={value} onChange={(event) => onChange(event.target.value)} /></label>; }
+function CategoryField({ value, onChange }: { value: string; onChange: (value: ProductCategorySlug) => void }) { return <label className="admin-field">Categoria<select value={value} onChange={(event) => onChange(event.target.value as ProductCategorySlug)} required><option value="">Selecione</option>{PRODUCT_CATEGORIES.map((category) => <option key={category.slug} value={category.slug}>{category.label}</option>)}</select></label>; }
 function NumberField({ label, value, integer, onChange }: { label: string; value?: number; integer?: boolean; onChange: (value?: number) => void }) { return <label className="admin-field">{label}<input type="number" min="0" step={integer ? "1" : "0.01"} value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></label>; }
 function round(value: number, decimals: number) { return Number(value.toFixed(decimals)); }
 function Metric({ label, value }: { label: string; value: string }) { return <div><p className="font-bold uppercase text-muted">{label}</p><p className="mt-1 text-sm font-extrabold text-ink">{value}</p></div>; }
