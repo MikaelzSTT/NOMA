@@ -60,7 +60,8 @@
 }
 
 .galleryMain img {
-  object-fit: cover;
+  object-fit: contain;
+  padding: clamp(1.25rem, 4vw, 4.25rem);
 }
 
 .spriteImage {
@@ -105,6 +106,12 @@
 
 .thumbnail img {
   object-fit: cover;
+}
+
+.productDetail[data-noma-product-category="moveis"] .gallery,
+.productDetail[data-noma-product-category="moveis"] .galleryMain,
+.productDetail[data-noma-product-category="moveis"] .thumbnail {
+  background: #fff;
 }
 
 .summary {
