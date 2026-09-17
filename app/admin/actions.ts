@@ -90,14 +90,26 @@ const requiredMoney = z.preprocess((value) => value === "" ? undefined : value, 
 const optionalDeliveryDays = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional());
 const availabilitySchema = z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]);
 const optionalString = (max: number) => z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(max).optional());
-const optionalImageUrl = z.preprocess((value) => value === "" ? undefined : value, imageUrl.optional());
+const textureImageUrl = z.string().trim().url().refine((value) => {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    return url.protocol === "https:"
+      && hostname !== "localhost"
+      && hostname !== "0.0.0.0"
+      && hostname !== "127.0.0.1";
+  } catch {
+    return false;
+  }
+}, "Use uma URL pública HTTPS.");
+const optionalTextureImageUrl = z.preprocess((value) => value === "" ? undefined : value, textureImageUrl.optional());
 const colorMaterialOptionSchema = z.object({
   name: optionalString(160),
   colorHex: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().trim().regex(/^#[0-9a-f]{6}$/i).transform((value) => value.toUpperCase()).optional(),
   ),
-  textureImageUrl: optionalImageUrl,
+  textureImageUrl: optionalTextureImageUrl,
 });
 const colorMaterialOptionsSchema = z.array(colorMaterialOptionSchema).max(100);
 const variantSchema = z.object({

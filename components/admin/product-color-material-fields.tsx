@@ -145,11 +145,9 @@ export function ProductColorMaterialFields({
         handleUploadUrl: PRODUCT_IMAGE_UPLOAD_ENDPOINT,
         multipart: file.size > PRODUCT_IMAGE_MULTIPART_THRESHOLD_BYTES,
       });
-      let shouldKeepBlob = false;
       let replacedSessionUrl: string | undefined;
       setOptions((current) => current.map((option) => {
         if (option.key !== key || option.textureUploadId !== uploadId) return option;
-        shouldKeepBlob = true;
         if (option.textureUploadedThisSession && option.textureImageUrl && option.textureImageUrl !== blob.url) {
           replacedSessionUrl = option.textureImageUrl;
         }
@@ -164,7 +162,6 @@ export function ProductColorMaterialFields({
         };
       }));
       URL.revokeObjectURL(localPreviewUrl);
-      if (!shouldKeepBlob) void deleteUploadedBlob(blob.url);
       if (replacedSessionUrl) void deleteUploadedBlob(replacedSessionUrl);
     } catch {
       setOptions((current) => current.map((option) => option.key === key && option.textureUploadId === uploadId

@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { Market } from "@/lib/market";
 import { imageDedupeKey } from "@/lib/product-gallery-images";
-import { isDisplayableColorMaterialOption } from "@/lib/product-color-material-options";
+import { isDisplayableColorMaterialOption, publicTextureImageUrl } from "@/lib/product-color-material-options";
 import type { ProductFilters } from "@/lib/validation/product";
 
 const offerSelect = {
@@ -375,7 +375,7 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     images,
     colorMaterialOptions: product.hasColorMaterialOptions
       ? product.colorMaterialOptions.flatMap((option) => {
-        const textureImageUrl = option.textureImageUrl?.trim() || null;
+        const textureImageUrl = publicTextureImageUrl(option.textureImageUrl);
         const colorHex = option.colorHex?.trim() || null;
         const normalized = { id: option.id, name: option.name?.trim() || null, colorHex, textureImageUrl };
         return isDisplayableColorMaterialOption(normalized) ? [normalized] : [];
