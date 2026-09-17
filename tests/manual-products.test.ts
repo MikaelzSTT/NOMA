@@ -212,6 +212,82 @@ describe("createManualProduct", () => {
     }));
   });
 
+  it("mantém cor/material desligado por padrão sem bloquear publicação", async () => {
+    await createManualProduct(baseInput);
+
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        active: true,
+        variants: {
+          create: [expect.objectContaining({
+            hasColorMaterial: false,
+            colorMaterialName: null,
+            colorHex: null,
+            textureImageUrl: null,
+          })],
+        },
+      }),
+    }));
+  });
+
+  it("grava amostra de textura por variante mantendo a imagem comercial separada", async () => {
+    await createManualProduct({
+      ...baseInput,
+      variants: [{
+        label: "2,20 m + Bouclé Off White",
+        sku: "SOFA-220-BOUCLE",
+        attributes: { tamanho: "2,20 m" },
+        costPrice: 1800,
+        salePrice: 3200,
+        stock: 2,
+        active: true,
+        availability: "AVAILABLE",
+        imageUrl: "https://cdn.example.com/sofa-off-white.jpg",
+        hasColorMaterial: true,
+        colorMaterialName: "Bouclé Off White",
+        materialType: "Bouclé",
+        colorHex: "#F1EBDD",
+        textureImageUrl: "https://cdn.example.com/boucle-off-white.jpg",
+        isDefault: true,
+      }],
+    });
+
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        variants: {
+          create: [expect.objectContaining({
+            imageUrl: "https://cdn.example.com/sofa-off-white.jpg",
+            hasColorMaterial: true,
+            colorMaterialName: "Bouclé Off White",
+            materialType: "Bouclé",
+            colorHex: "#F1EBDD",
+            textureImageUrl: "https://cdn.example.com/boucle-off-white.jpg",
+          })],
+        },
+      }),
+    }));
+  });
+
+  it("rejeita cor/material ligado sem nome ou amostra visual", async () => {
+    await expect(createManualProduct({
+      ...baseInput,
+      variants: [{
+        label: "2,20 m",
+        attributes: { tamanho: "2,20 m" },
+        costPrice: 1800,
+        salePrice: 3200,
+        stock: 2,
+        active: true,
+        availability: "AVAILABLE",
+        hasColorMaterial: true,
+        isDefault: true,
+      }],
+    })).rejects.toEqual(new ManualProductError("color-material-invalid"));
+
+    expect(mocks.transaction.product.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.productMarketOffer.create).not.toHaveBeenCalled();
+  });
+
   it("bloqueia criação se variante ativa com custo não tiver preço de venda", async () => {
     await expect(createManualProduct({
       ...baseInput,

@@ -110,6 +110,11 @@ export async function upsertCatalogProductInTransaction(
         compareAtPrice: true,
         sourceUrl: true,
         imageUrl: true,
+        hasColorMaterial: true,
+        colorMaterialName: true,
+        materialType: true,
+        colorHex: true,
+        textureImageUrl: true,
         isDefault: true,
         manualPriceOverride: true,
         manualActiveOverride: true,
@@ -254,6 +259,18 @@ export async function upsertCatalogProductInTransaction(
   }));
   const offerVariants = parsed.variants.map((variant, index) => {
     const existingVariant = existingOffer?.variants.find((item) => variantMatchesExistingOfferVariant(item, variant));
+    const incomingHasColorMaterial = variant.hasColorMaterial
+      ?? Boolean(variant.colorMaterialName && (variant.colorHex || variant.textureImageUrl));
+    const preserveExistingColorMaterial = Boolean(
+      options.preserveSupplierDataWhenMissing
+      && variant.hasColorMaterial == null
+      && !variant.colorMaterialName
+      && !variant.materialType
+      && !variant.colorHex
+      && !variant.textureImageUrl
+      && existingVariant?.hasColorMaterial,
+    );
+    const hasColorMaterial = incomingHasColorMaterial || preserveExistingColorMaterial;
     const costPrice = variant.costPrice
       ?? (options.preserveSupplierDataWhenMissing && existingVariant?.costPrice != null ? Number(existingVariant.costPrice) : undefined)
       ?? parsed.costPrice
@@ -285,6 +302,11 @@ export async function upsertCatalogProductInTransaction(
       availability,
       sourceUrl: variant.sourceUrl ?? parsed.sourceUrl,
       imageUrl: variant.imageUrl ?? (options.preserveSupplierDataWhenMissing ? existingVariant?.imageUrl ?? null : null),
+      hasColorMaterial,
+      colorMaterialName: hasColorMaterial ? variant.colorMaterialName ?? existingVariant?.colorMaterialName ?? null : null,
+      materialType: hasColorMaterial ? variant.materialType ?? existingVariant?.materialType ?? null : null,
+      colorHex: hasColorMaterial ? variant.colorHex ?? existingVariant?.colorHex ?? null : null,
+      textureImageUrl: hasColorMaterial ? variant.textureImageUrl ?? existingVariant?.textureImageUrl ?? null : null,
       isDefault: existingVariant?.isDefault ?? index === 0,
       position: index,
       manualPriceOverride: variantManualOverride,
@@ -429,6 +451,11 @@ type ExistingOfferVariant = {
   availability: string;
   sourceUrl?: string | null;
   imageUrl?: string | null;
+  hasColorMaterial?: boolean | null;
+  colorMaterialName?: string | null;
+  materialType?: string | null;
+  colorHex?: string | null;
+  textureImageUrl?: string | null;
   isDefault?: boolean | null;
   manualPriceOverride: boolean;
   manualActiveOverride?: boolean | null;

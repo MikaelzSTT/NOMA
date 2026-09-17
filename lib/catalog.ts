@@ -32,7 +32,12 @@ const offerSelect = {
   productId: true,
   variants: {
     where: { active: true },
-    select: { id: true, label: true, sku: true, attributes: true, salePrice: true, compareAtPrice: true, stock: true, availability: true, imageUrl: true, isDefault: true, position: true },
+    select: {
+      id: true, label: true, sku: true, attributes: true, salePrice: true, compareAtPrice: true,
+      stock: true, availability: true, imageUrl: true, hasColorMaterial: true,
+      colorMaterialName: true, materialType: true, colorHex: true, textureImageUrl: true,
+      isDefault: true, position: true,
+    },
     orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
   },
   supplier: { select: { id: true, name: true, slug: true, shippingStrategy: true } },
@@ -112,6 +117,11 @@ export interface CatalogProductVariant {
   stock: number;
   availability: string;
   imageUrl: string | null;
+  hasColorMaterial: boolean;
+  colorMaterialName: string | null;
+  materialType: string | null;
+  colorHex: string | null;
+  textureImageUrl: string | null;
   isDefault: boolean;
 }
 
@@ -314,6 +324,11 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     stock: variant.stock,
     availability: variant.availability,
     imageUrl: variant.imageUrl,
+    hasColorMaterial: Boolean(variant.hasColorMaterial),
+    colorMaterialName: variant.colorMaterialName ?? null,
+    materialType: variant.materialType ?? null,
+    colorHex: variant.colorHex ?? null,
+    textureImageUrl: variant.textureImageUrl ?? null,
     isDefault: variant.isDefault,
   }));
   const defaultOfferVariant = offerVariants.find((variant) => variant.isDefault) ?? offerVariants[0];
@@ -366,6 +381,11 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
       stock: variant.stock,
       availability: variant.stock > 0 ? "AVAILABLE" : "OUT_OF_STOCK",
       imageUrl: null,
+      hasColorMaterial: false,
+      colorMaterialName: null,
+      materialType: null,
+      colorHex: null,
+      textureImageUrl: null,
       isDefault: index === 0,
     })),
   };

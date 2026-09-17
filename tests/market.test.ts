@@ -61,6 +61,26 @@ describe("mercados públicos", () => {
     expect(product?.variants[0]).not.toHaveProperty("costPrice");
   });
 
+  it("expõe cor/material somente como metadado opcional da variante", async () => {
+    const withoutMaterial = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+    expect(withoutMaterial?.variants[0]).toMatchObject({ hasColorMaterial: false, colorMaterialName: null });
+
+    Object.assign(mocks.brOffer.variants[0]!, {
+      hasColorMaterial: true,
+      colorMaterialName: "Bouclé Off White",
+      materialType: "Bouclé",
+      colorHex: "#F1EBDD",
+      textureImageUrl: "https://cdn.example.com/boucle.jpg",
+    });
+    const withMaterial = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(withMaterial?.variants[0]).toMatchObject({
+      hasColorMaterial: true,
+      colorMaterialName: "Bouclé Off White",
+      textureImageUrl: "https://cdn.example.com/boucle.jpg",
+    });
+  });
+
   it("usa prazo cadastrado como fallback mesmo quando fornecedor usa cotacao dinamica", async () => {
     mocks.brOffer.supplier.shippingStrategy = "SUPPLIER_API";
 

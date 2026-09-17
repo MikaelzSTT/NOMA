@@ -50,6 +50,7 @@ describe("toAdminOfferVariants", () => {
       active: false,
       availability: "OUT_OF_STOCK",
       manualPriceOverride: false,
+      hasColorMaterial: false,
       isDefault: true,
     });
   });
@@ -101,6 +102,35 @@ describe("toAdminOfferVariants", () => {
       stock: 5,
       active: false,
       availability: "AVAILABLE",
+    });
+  });
+
+  it("carrega os metadados opcionais de cor/material da variante", () => {
+    const variants = toAdminOfferVariants({
+      ...offer,
+      variants: [{
+        label: "Queen + Linho Bege",
+        attributes: { tamanho: "Queen" },
+        costPrice: 1100,
+        salePrice: 1990,
+        stock: 5,
+        active: true,
+        availability: "AVAILABLE",
+        hasColorMaterial: true,
+        colorMaterialName: "Linho Bege",
+        materialType: "Linho",
+        colorHex: "#D8C3A5",
+        textureImageUrl: "https://cdn.example.com/linho-bege.jpg",
+        isDefault: true,
+      }],
+    }, product);
+
+    expect(variants[0]).toMatchObject({
+      hasColorMaterial: true,
+      colorMaterialName: "Linho Bege",
+      materialType: "Linho",
+      colorHex: "#D8C3A5",
+      textureImageUrl: "https://cdn.example.com/linho-bege.jpg",
     });
   });
 });

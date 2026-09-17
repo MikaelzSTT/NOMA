@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Clock3, Store, Truck } from "lucide-react";
 import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
+import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
 import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
 import type { CatalogProductVariant } from "@/lib/catalog";
@@ -104,6 +105,12 @@ export function ProductDetailPurchase({
       <div className={styles.summary}>
         <p className={styles.brand}>{brandLabel}</p>
         <h1 className={styles.title}>{name}</h1>
+        <ProductColorMaterialSelector
+          market={market}
+          variants={variants}
+          selected={selectedVariant}
+          onSelectVariant={handleSelectVariant}
+        />
         <div className={styles.rating}><Rating value={rating} count={reviewCount} market={market} /></div>
         {shortDescription && <p className={styles.description}>{shortDescription}</p>}
         <ProductVariantSelector

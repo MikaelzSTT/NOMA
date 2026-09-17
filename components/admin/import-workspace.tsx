@@ -19,7 +19,11 @@ type EditableProduct = {
   manualPriceOverride?: boolean;
   availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN" | "REMOVED";
   shippingCost?: number; estimatedDelivery?: string; sourceUrl?: string;
-  variants: Array<{ supplierVariantId?: string; sku: string; title: string; options: Record<string, string>; costPrice?: number; sellingPrice?: number; stock: number; active?: boolean; manualPriceOverride?: boolean }>;
+  variants: Array<{
+    supplierVariantId?: string; sku: string; title: string; options: Record<string, string>;
+    costPrice?: number; sellingPrice?: number; stock: number; active?: boolean; manualPriceOverride?: boolean;
+    hasColorMaterial?: boolean; colorMaterialName?: string; materialType?: string; colorHex?: string; textureImageUrl?: string;
+  }>;
   attributes: Record<string, string | number | boolean>; active: boolean; featured: boolean;
 };
 type Job = {

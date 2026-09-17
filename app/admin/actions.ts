@@ -89,7 +89,10 @@ const optionalMoney = z.preprocess((value) => value === "" ? undefined : value, 
 const requiredMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative());
 const optionalDeliveryDays = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional());
 const availabilitySchema = z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]);
-const variantSchema = z.object({
+const variantSchema = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value) || (value as { hasColorMaterial?: unknown }).hasColorMaterial === true) return value;
+  return { ...value, colorMaterialName: undefined, materialType: undefined, colorHex: undefined, textureImageUrl: undefined };
+}, z.object({
   label: z.string().trim().min(1).max(300),
   sku: z.string().trim().max(255).optional(),
   attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
@@ -102,8 +105,21 @@ const variantSchema = z.object({
   availability: availabilitySchema,
   sourceUrl: sourceUrl.optional(),
   imageUrl: imageUrl.optional(),
+  hasColorMaterial: z.boolean().default(false),
+  colorMaterialName: z.string().trim().min(1).max(160).optional(),
+  materialType: z.string().trim().min(1).max(120).optional(),
+  colorHex: z.string().trim().regex(/^#[0-9a-f]{6}$/i).transform((value) => value.toUpperCase()).optional(),
+  textureImageUrl: imageUrl.optional(),
   isDefault: z.boolean().default(false),
-});
+}).superRefine((variant, context) => {
+  if (!variant.hasColorMaterial) return;
+  if (!variant.colorMaterialName) {
+    context.addIssue({ code: "custom", path: ["colorMaterialName"], message: "Informe o nome da cor/material." });
+  }
+  if (!variant.colorHex && !variant.textureImageUrl) {
+    context.addIssue({ code: "custom", path: ["colorHex"], message: "Informe uma cor HEX ou imagem de textura." });
+  }
+}));
 const variantsSchema = z.array(variantSchema).min(1).max(200).transform((variants) => {
   const defaultIndex = Math.max(0, variants.findIndex((variant) => variant.isDefault));
   return variants.map((variant, index) => ({ ...variant, isDefault: index === defaultIndex }));
@@ -345,6 +361,11 @@ export async function updateInternalProductAction(formData: FormData) {
         availability: variant.availability,
         sourceUrl: variant.sourceUrl ?? null,
         imageUrl: variant.imageUrl ?? null,
+        hasColorMaterial: variant.hasColorMaterial,
+        colorMaterialName: variant.hasColorMaterial ? variant.colorMaterialName ?? null : null,
+        materialType: variant.hasColorMaterial ? variant.materialType ?? null : null,
+        colorHex: variant.hasColorMaterial ? variant.colorHex ?? null : null,
+        textureImageUrl: variant.hasColorMaterial ? variant.textureImageUrl ?? null : null,
         isDefault: variant.isDefault,
         position,
       })),

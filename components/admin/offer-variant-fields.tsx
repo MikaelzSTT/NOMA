@@ -24,6 +24,11 @@ export interface AdminOfferVariant {
   availability: Availability;
   sourceUrl?: string;
   imageUrl?: string;
+  hasColorMaterial?: boolean;
+  colorMaterialName?: string;
+  materialType?: string;
+  colorHex?: string;
+  textureImageUrl?: string;
   isDefault: boolean;
 }
 
@@ -163,6 +168,7 @@ function VariantCard({
   const calculated = supportsNomaPricing ? safeNomaPrice(variant) : null;
   const selectedMargin = variant.salePrice > 0 ? calculateGrossMargin(variant.costPrice, variant.salePrice) : null;
   const manualBelowExpected = Boolean(variant.manualPriceOverride && calculated && variant.salePrice > 0 && variant.salePrice < calculated.basePrice);
+  const hasVisualSample = Boolean(variant.colorHex?.trim() || variant.textureImageUrl?.trim());
 
   return (
     <div className="rounded-sm border border-border p-4">
@@ -228,6 +234,63 @@ function VariantCard({
                 Margem abaixo da regra esperada. Revise manualmente esta variante antes de publicar.
               </p>
             )}
+            <div className="mt-4 rounded-sm border border-border bg-surface p-4">
+              <label className="flex cursor-pointer items-center justify-between gap-4 text-sm font-bold text-ink">
+                <span>
+                  Tem cor/tecido?
+                  <small className="mt-1 block text-xs font-normal text-muted">Opcional e configurado por variante.</small>
+                </span>
+                <span className={`relative h-6 w-11 rounded-full transition-colors ${variant.hasColorMaterial ? "bg-brand" : "bg-stone-300"}`}>
+                  <input
+                    className="sr-only"
+                    type="checkbox"
+                    role="switch"
+                    aria-checked={Boolean(variant.hasColorMaterial)}
+                    checked={Boolean(variant.hasColorMaterial)}
+                    onChange={(event) => patchVariant(index, { hasColorMaterial: event.target.checked })}
+                  />
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${variant.hasColorMaterial ? "translate-x-5" : "translate-x-0.5"}`} />
+                </span>
+              </label>
+              {variant.hasColorMaterial && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <TextField label="Nome da cor/material" value={variant.colorMaterialName ?? ""} required onChange={(value) => patchVariant(index, { colorMaterialName: value })} />
+                    <TextField label="Tipo de material" value={variant.materialType ?? ""} onChange={(value) => patchVariant(index, { materialType: value })} />
+                    <label className="admin-field">
+                      Cor HEX
+                      <input
+                        value={variant.colorHex ?? ""}
+                        required={!variant.textureImageUrl?.trim()}
+                        maxLength={7}
+                        pattern="#[0-9A-Fa-f]{6}"
+                        placeholder="#C49A6C"
+                        onChange={(event) => patchVariant(index, { colorHex: event.target.value.toUpperCase() })}
+                      />
+                    </label>
+                    <TextField
+                      label="Imagem/textura (URL)"
+                      value={variant.textureImageUrl ?? ""}
+                      required={!variant.colorHex?.trim()}
+                      onChange={(value) => patchVariant(index, { textureImageUrl: value })}
+                    />
+                  </div>
+                  <p className="text-xs text-muted">Informe HEX ou imagem. Quando ambos existirem, a textura terá prioridade na vitrine.</p>
+                  {hasVisualSample && (
+                    <div className="flex items-center gap-3 text-xs font-semibold text-muted">
+                      <span
+                        aria-hidden="true"
+                        className="h-12 w-12 shrink-0 rounded-sm border border-border bg-cover bg-center"
+                        style={variant.textureImageUrl?.trim()
+                          ? { backgroundImage: `url(${JSON.stringify(variant.textureImageUrl.trim())})`, backgroundColor: variant.colorHex || undefined }
+                          : { backgroundColor: variant.colorHex }}
+                      />
+                      Prévia da amostra
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <TextField label="URL da variante opcional" value={variant.sourceUrl ?? ""} onChange={(value) => patchVariant(index, { sourceUrl: value })} />
               <TextField label="Imagem específica opcional" value={variant.imageUrl ?? ""} onChange={(value) => patchVariant(index, { imageUrl: value })} />
@@ -267,11 +330,17 @@ function blankVariant(index: number): EditableVariant {
     availability: "AVAILABLE",
     sourceUrl: "",
     imageUrl: "",
+    hasColorMaterial: false,
+    colorMaterialName: "",
+    materialType: "",
+    colorHex: "",
+    textureImageUrl: "",
     isDefault: index === 0,
   };
 }
 
 function toSerializedVariant(variant: EditableVariant) {
+  const hasColorMaterial = Boolean(variant.hasColorMaterial);
   return {
     label: variant.label,
     sku: optionalText(variant.sku),
@@ -285,6 +354,11 @@ function toSerializedVariant(variant: EditableVariant) {
     availability: variant.availability,
     sourceUrl: optionalText(variant.sourceUrl),
     imageUrl: optionalText(variant.imageUrl),
+    hasColorMaterial,
+    colorMaterialName: hasColorMaterial ? optionalText(variant.colorMaterialName) : undefined,
+    materialType: hasColorMaterial ? optionalText(variant.materialType) : undefined,
+    colorHex: hasColorMaterial ? optionalText(variant.colorHex)?.toUpperCase() : undefined,
+    textureImageUrl: hasColorMaterial ? optionalText(variant.textureImageUrl) : undefined,
     isDefault: variant.isDefault,
   };
 }

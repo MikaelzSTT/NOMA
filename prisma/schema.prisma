@@ -319,6 +319,11 @@ model ProductMarketOfferVariant {
   availability        AvailabilityStatus @default(UNKNOWN)
   sourceUrl           String?
   imageUrl            String?
+  hasColorMaterial    Boolean            @default(false)
+  colorMaterialName   String?
+  materialType        String?
+  colorHex            String?            @db.VarChar(7)
+  textureImageUrl     String?
   isDefault           Boolean            @default(false)
   position            Int                @default(0)
   createdAt           DateTime           @default(now())

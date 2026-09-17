@@ -634,9 +634,17 @@ function sanitizePreview(preview: ProductUrlImportPreview): ProductUrlImportPrev
       sku: truncateText(compactText(variant.sku), 255),
       currency: currency(variant.currency),
       compareAtPrice: normalizeCompareAt(variant.compareAtPrice, variant.sourcePrice),
+      colorMaterialName: truncateText(compactText(variant.colorMaterialName), 160),
+      materialType: truncateText(compactText(variant.materialType), 120),
+      colorHex: normalizeColorHex(variant.colorHex),
       attributes: Object.fromEntries(Object.entries(variant.attributes).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value)).slice(0, 20)),
     })),
   };
+}
+
+function normalizeColorHex(value?: string) {
+  const normalized = value?.trim().toUpperCase();
+  return normalized && /^#[0-9A-F]{6}$/.test(normalized) ? normalized : undefined;
 }
 
 function normalizeCompareAt(compareAtPrice?: number, sourcePrice?: number) {

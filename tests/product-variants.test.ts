@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deriveVariantGroups, findVariantForAttribute, variantIsSelectable } from "@/lib/product-variants";
+import {
+  deriveColorMaterialOptions,
+  deriveVariantGroups,
+  findVariantForAttribute,
+  findVariantForColorMaterial,
+  variantIsSelectable,
+} from "@/lib/product-variants";
 
 const variants = [
   { id: "sol-bege", label: "Solteiro bege", attributes: { tamanho: "Solteiro", cor: "Bege" }, stock: 3, availability: "AVAILABLE" },
@@ -98,7 +104,63 @@ describe("seletor compacto de variantes", () => {
       "King 193×203",
     ]);
   });
+
+  it("não cria bloco de cor/material para variantes antigas sem a opção", () => {
+    expect(deriveColorMaterialOptions(mattress())).toEqual([]);
+  });
+
+  it("resolve cor e tamanho como dimensões da mesma variante", () => {
+    const combinations = colorAndSizeVariants();
+    const groups = deriveVariantGroups(combinations, "BR");
+    const materials = deriveColorMaterialOptions(combinations);
+    const selected = combinations[0];
+    const caramel = materials.find((material) => material.name === "Caramelo")!;
+
+    expect(groups.map((group) => group.key)).toEqual(["tamanho"]);
+    expect(materials.map((material) => material.name)).toEqual(["Pele 10BU", "Caramelo"]);
+    expect(findVariantForColorMaterial(combinations, groups, selected, caramel.key)?.id).toBe("220-caramelo");
+
+    const selectedCaramel = combinations[1];
+    expect(findVariantForAttribute(combinations, groups, selectedCaramel, "tamanho", "2,40 m")?.id).toBe("240-caramelo");
+  });
+
+  it("mantém indisponível o swatch da combinação atual mesmo se outra medida tiver estoque", () => {
+    const combinations = colorAndSizeVariants();
+    combinations[1] = { ...combinations[1], stock: 0, availability: "OUT_OF_STOCK" };
+    const groups = deriveVariantGroups(combinations, "BR");
+    const caramel = deriveColorMaterialOptions(combinations).find((material) => material.name === "Caramelo")!;
+    const candidate = findVariantForColorMaterial(combinations, groups, combinations[0], caramel.key);
+
+    expect(candidate?.id).toBe("220-caramelo");
+    expect(candidate && variantIsSelectable(candidate)).toBe(false);
+  });
 });
+
+function colorAndSizeVariants() {
+  return [
+    colorVariant("220-10bu", "2,20 m", "Pele 10BU", "#9A7657"),
+    colorVariant("220-caramelo", "2,20 m", "Caramelo", "#B56E3D"),
+    colorVariant("240-10bu", "2,40 m", "Pele 10BU", "#9A7657"),
+    colorVariant("240-caramelo", "2,40 m", "Caramelo", "#B56E3D"),
+  ];
+}
+
+function colorVariant(id: string, tamanho: string, colorMaterialName: string, colorHex: string) {
+  return {
+    id,
+    label: `${tamanho} + ${colorMaterialName}`,
+    attributes: { tamanho },
+    stock: 2,
+    availability: "AVAILABLE",
+    active: true,
+    salePrice: 3500,
+    hasColorMaterial: true,
+    colorMaterialName,
+    materialType: "Couro",
+    colorHex,
+    textureImageUrl: null,
+  };
+}
 
 function mattress() {
   return [

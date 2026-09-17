@@ -90,6 +90,10 @@ describe("updateInternalProductAction", () => {
       stock: 4,
       active: true,
       availability: "AVAILABLE",
+      hasColorMaterial: true,
+      colorMaterialName: "Caramelo",
+      materialType: "Couro",
+      colorHex: "#B56E3D",
       isDefault: true,
       manualPriceOverride: true,
     }]));
@@ -110,5 +114,14 @@ describe("updateInternalProductAction", () => {
         estimatedDeliveryMaxDays: null,
       }),
     }));
+    expect(mocks.transaction.productMarketOfferVariant.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        hasColorMaterial: true,
+        colorMaterialName: "Caramelo",
+        materialType: "Couro",
+        colorHex: "#B56E3D",
+        textureImageUrl: null,
+      })],
+    });
   });
 });
