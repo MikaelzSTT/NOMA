@@ -1,8 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { requireAdmin } from "@/lib/auth";
-
-const allowedContentTypes = ["image/jpeg", "image/png", "image/webp"];
-const maximumSizeInBytes = 8 * 1024 * 1024;
+import { PRODUCT_IMAGE_ACCEPTED_TYPES, PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES } from "@/lib/product-image-upload";
 
 export async function POST(request: Request) {
   let body: HandleUploadBody;
@@ -22,8 +20,8 @@ export async function POST(request: Request) {
           throw new Error("missing-blob-token");
         }
         return {
-          allowedContentTypes,
-          maximumSizeInBytes,
+          allowedContentTypes: [...PRODUCT_IMAGE_ACCEPTED_TYPES],
+          maximumSizeInBytes: PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES,
           addRandomSuffix: true,
           tokenPayload: JSON.stringify({ pathname }),
         };

@@ -3,9 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { GripVertical, ImageOff, LoaderCircle, Upload, X } from "lucide-react";
+import {
+  PRODUCT_IMAGE_ACCEPT_ATTRIBUTE,
+  PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES,
+  PRODUCT_IMAGE_MULTIPART_THRESHOLD_BYTES,
+  PRODUCT_IMAGE_UPLOAD_ENDPOINT,
+  formatProductImageBytes,
+  isAcceptedProductImageType,
+  productImageBlobPathname,
+} from "@/lib/product-image-upload";
 
-const acceptedTypes = ["image/jpeg", "image/png", "image/webp"];
-const maxFileSizeBytes = 8 * 1024 * 1024;
 const maxImages = 30;
 
 type UploadStatus = "ready" | "uploading" | "error";
@@ -58,12 +65,12 @@ export function ProductImageManager({ initialImages, required = false }: { initi
     const validFiles: File[] = [];
     const errors: string[] = [];
     for (const file of selected) {
-      if (!acceptedTypes.includes(file.type)) {
+      if (!isAcceptedProductImageType(file.type)) {
         errors.push(`${file.name}: use JPG, JPEG, PNG ou WebP.`);
         continue;
       }
-      if (file.size > maxFileSizeBytes) {
-        errors.push(`${file.name}: tamanho máximo de ${formatBytes(maxFileSizeBytes)}.`);
+      if (file.size > PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES) {
+        errors.push(`${file.name}: tamanho máximo de ${formatProductImageBytes(PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES)}.`);
         continue;
       }
       validFiles.push(file);
@@ -86,8 +93,8 @@ export function ProductImageManager({ initialImages, required = false }: { initi
         const blob = await upload(blobPathname(file.name), file, {
           access: "public",
           contentType: file.type,
-          handleUploadUrl: "/api/admin/product-images/upload",
-          multipart: file.size > 4 * 1024 * 1024,
+          handleUploadUrl: PRODUCT_IMAGE_UPLOAD_ENDPOINT,
+          multipart: file.size > PRODUCT_IMAGE_MULTIPART_THRESHOLD_BYTES,
         });
         setItems((current) => current.map((currentItem) => currentItem.id === item.id ? { ...currentItem, url: blob.url, previewUrl: blob.url, status: "ready", uploadedThisSession: true } : currentItem));
         URL.revokeObjectURL(item.previewUrl);
@@ -140,11 +147,11 @@ export function ProductImageManager({ initialImages, required = false }: { initi
       </label>
 
       <div className="flex flex-wrap items-center gap-3">
-        <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple className="hidden" onChange={(event) => void addFiles(event.target.files)} />
+        <input ref={fileInputRef} type="file" accept={PRODUCT_IMAGE_ACCEPT_ATTRIBUTE} multiple className="hidden" onChange={(event) => void addFiles(event.target.files)} />
         <button type="button" className="button-secondary" onClick={() => fileInputRef.current?.click()}>
           <Upload size={17} /> Adicionar imagens do dispositivo
         </button>
-        <p className="text-sm text-muted">JPG, JPEG, PNG ou WebP até {formatBytes(maxFileSizeBytes)} cada. Arraste para reordenar; a primeira é a principal.</p>
+        <p className="text-sm text-muted">JPG, JPEG, PNG ou WebP até {formatProductImageBytes(PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES)} cada. Arraste para reordenar; a primeira é a principal.</p>
       </div>
 
       {error && <div className="admin-alert error mb-0">{error}</div>}
@@ -198,12 +205,7 @@ function revokeLocalPreviews(items: ImageItem[]) {
 }
 
 function blobPathname(filename: string) {
-  const extension = filename.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-  return `products/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
-}
-
-function formatBytes(value: number) {
-  return `${Math.round(value / 1024 / 1024)} MB`;
+  return productImageBlobPathname(filename);
 }
 
 async function deleteUploadedBlob(url: string) {
