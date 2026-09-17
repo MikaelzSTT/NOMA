@@ -14,32 +14,6 @@ describe("normalização de produtos", () => {
     expect(parsed.success).toBe(false);
   });
 
-  it("valida nome e amostra somente quando cor/material está ligado", () => {
-    const baseVariant = MOCK_CATALOG[0]!.variants[0]!;
-    const invalid = normalizedSupplierProductSchema.safeParse({
-      ...MOCK_CATALOG[0],
-      variants: [{ ...baseVariant, hasColorMaterial: true }],
-    });
-    const disabled = normalizedSupplierProductSchema.safeParse({
-      ...MOCK_CATALOG[0],
-      variants: [{ ...baseVariant, hasColorMaterial: false, colorHex: "inválido" }],
-    });
-    const valid = normalizedSupplierProductSchema.safeParse({
-      ...MOCK_CATALOG[0],
-      variants: [{
-        ...baseVariant,
-        hasColorMaterial: true,
-        colorMaterialName: "Linho Bege",
-        materialType: "Linho",
-        colorHex: "#d8c3a5",
-      }],
-    });
-
-    expect(invalid.success).toBe(false);
-    expect(disabled.success).toBe(true);
-    expect(valid.success && valid.data.variants[0]?.colorHex).toBe("#D8C3A5");
-  });
-
   it("gera desconto, slug e hash determinísticos", () => {
     expect(calculateDiscount(80, 100)).toBe(20);
     expect(calculateDiscount(100, 80)).toBeUndefined();

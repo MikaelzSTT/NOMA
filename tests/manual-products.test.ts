@@ -212,30 +212,31 @@ describe("createManualProduct", () => {
     }));
   });
 
-  it("mantém cor/material desligado por padrão sem bloquear publicação", async () => {
+  it("mantém opções visuais desligadas por padrão sem bloquear publicação", async () => {
     await createManualProduct(baseInput);
 
-    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.transaction.product.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         active: true,
-        variants: {
-          create: [expect.objectContaining({
-            hasColorMaterial: false,
-            colorMaterialName: null,
-            colorHex: null,
-            textureImageUrl: null,
-          })],
-        },
+        hasColorMaterialOptions: false,
+        colorMaterialOptions: { create: [] },
       }),
     }));
   });
 
-  it("grava amostra de textura por variante mantendo a imagem comercial separada", async () => {
+  it("grava opções visuais no produto, inclusive campos opcionais e linha vazia", async () => {
     await createManualProduct({
       ...baseInput,
+      hasColorMaterialOptions: true,
+      colorMaterialOptions: [
+        { colorHex: "#F1EBDD" },
+        { textureImageUrl: "https://cdn.example.com/boucle-off-white.jpg" },
+        { name: "Bouclé 2286", textureImageUrl: "https://cdn.example.com/boucle-2286.jpg" },
+        {},
+      ],
       variants: [{
-        label: "2,20 m + Bouclé Off White",
-        sku: "SOFA-220-BOUCLE",
+        label: "2,20 m",
+        sku: "SOFA-220",
         attributes: { tamanho: "2,20 m" },
         costPrice: 1800,
         salePrice: 3200,
@@ -243,49 +244,24 @@ describe("createManualProduct", () => {
         active: true,
         availability: "AVAILABLE",
         imageUrl: "https://cdn.example.com/sofa-off-white.jpg",
-        hasColorMaterial: true,
-        colorMaterialName: "Bouclé Off White",
-        materialType: "Bouclé",
-        colorHex: "#F1EBDD",
-        textureImageUrl: "https://cdn.example.com/boucle-off-white.jpg",
         isDefault: true,
       }],
     });
 
-    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.transaction.product.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        variants: {
-          create: [expect.objectContaining({
-            imageUrl: "https://cdn.example.com/sofa-off-white.jpg",
-            hasColorMaterial: true,
-            colorMaterialName: "Bouclé Off White",
-            materialType: "Bouclé",
-            colorHex: "#F1EBDD",
-            textureImageUrl: "https://cdn.example.com/boucle-off-white.jpg",
-          })],
-        },
+        hasColorMaterialOptions: true,
+        colorMaterialOptions: { create: [
+          { colorHex: "#F1EBDD", sortOrder: 0 },
+          { textureImageUrl: "https://cdn.example.com/boucle-off-white.jpg", sortOrder: 1 },
+          { name: "Bouclé 2286", textureImageUrl: "https://cdn.example.com/boucle-2286.jpg", sortOrder: 2 },
+          { sortOrder: 3 },
+        ] },
       }),
     }));
-  });
-
-  it("rejeita cor/material ligado sem nome ou amostra visual", async () => {
-    await expect(createManualProduct({
-      ...baseInput,
-      variants: [{
-        label: "2,20 m",
-        attributes: { tamanho: "2,20 m" },
-        costPrice: 1800,
-        salePrice: 3200,
-        stock: 2,
-        active: true,
-        availability: "AVAILABLE",
-        hasColorMaterial: true,
-        isDefault: true,
-      }],
-    })).rejects.toEqual(new ManualProductError("color-material-invalid"));
-
-    expect(mocks.transaction.product.create).not.toHaveBeenCalled();
-    expect(mocks.transaction.productMarketOffer.create).not.toHaveBeenCalled();
+    expect(mocks.transaction.productMarketOffer.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ variants: { create: [expect.objectContaining({ sku: "SOFA-220", salePrice: 3200, stock: 2 })] } }),
+    }));
   });
 
   it("bloqueia criação se variante ativa com custo não tiver preço de venda", async () => {

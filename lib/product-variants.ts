@@ -5,11 +5,6 @@ export interface SelectableProductVariant {
   stock: number;
   availability: string;
   active?: boolean;
-  hasColorMaterial?: boolean;
-  colorMaterialName?: string | null;
-  materialType?: string | null;
-  colorHex?: string | null;
-  textureImageUrl?: string | null;
 }
 
 export interface ProductVariantGroup {
@@ -22,15 +17,6 @@ export interface ProductVariantGroup {
 export interface ProductVariantOption {
   value: string;
   label: string;
-  variantIds: string[];
-}
-
-export interface ColorMaterialOption {
-  key: string;
-  name: string;
-  materialType: string | null;
-  colorHex: string | null;
-  textureImageUrl: string | null;
   variantIds: string[];
 }
 
@@ -49,9 +35,7 @@ const ATTRIBUTE_LABELS: Record<string, { BR: string; US: string }> = {
 
 export function deriveVariantGroups(variants: SelectableProductVariant[], market: "BR" | "US") {
   if (variants.length < 2) return [];
-  const hasDedicatedColorMaterial = variants.some((variant) => variant.hasColorMaterial);
-  const keys = Array.from(new Set(variants.flatMap((variant) => Object.keys(variant.attributes))))
-    .filter((key) => !hasDedicatedColorMaterial || !isColorMaterialAttributeKey(key));
+  const keys = Array.from(new Set(variants.flatMap((variant) => Object.keys(variant.attributes))));
   const groups = keys.flatMap<RawProductVariantGroup>((key) => {
     if (variants.some((variant) => variant.attributes[key] == null || String(variant.attributes[key]).trim() === "")) return [];
     const values = Array.from(new Set(variants.map((variant) => String(variant.attributes[key]))));
@@ -87,67 +71,7 @@ export function findVariantForAttribute<T extends SelectableProductVariant>(
       group.key === key || !selected || String(variant.attributes[group.key]) === String(selected.attributes[group.key])
     ));
   });
-  if (selected?.hasColorMaterial) {
-    const selectedMaterialKey = colorMaterialOptionKey(selected);
-    const sameMaterial = matches.filter((variant) => variant.hasColorMaterial && colorMaterialOptionKey(variant) === selectedMaterialKey);
-    if (sameMaterial.length) return sameMaterial.find(variantIsSelectable) ?? sameMaterial[0];
-  }
   return matches.find(variantIsSelectable) ?? matches[0];
-}
-
-export function deriveColorMaterialOptions(variants: SelectableProductVariant[]): ColorMaterialOption[] {
-  const options = new Map<string, ColorMaterialOption>();
-  for (const variant of variants) {
-    if (!hasCompleteColorMaterial(variant)) continue;
-    const key = colorMaterialOptionKey(variant);
-    const current = options.get(key);
-    if (current) {
-      current.variantIds.push(variant.id);
-      if (!current.textureImageUrl && variant.textureImageUrl) current.textureImageUrl = variant.textureImageUrl;
-      if (!current.colorHex && variant.colorHex) current.colorHex = variant.colorHex;
-      continue;
-    }
-    options.set(key, {
-      key,
-      name: variant.colorMaterialName.trim(),
-      materialType: variant.materialType?.trim() || null,
-      colorHex: variant.colorHex?.trim() || null,
-      textureImageUrl: variant.textureImageUrl?.trim() || null,
-      variantIds: [variant.id],
-    });
-  }
-  return Array.from(options.values());
-}
-
-export function findVariantForColorMaterial<T extends SelectableProductVariant>(
-  variants: T[],
-  groups: ProductVariantGroup[],
-  selected: T | undefined,
-  materialKey: string,
-) {
-  const matches = variants.filter((variant) => variant.hasColorMaterial && colorMaterialOptionKey(variant) === materialKey);
-  if (!selected || !groups.length) return matches.find(variantIsSelectable) ?? matches[0];
-  const sameAttributes = matches.filter((variant) => groups.every((group) => (
-    selected.attributes[group.key] == null
-    || String(variant.attributes[group.key]) === String(selected.attributes[group.key])
-  )));
-  return sameAttributes.find(variantIsSelectable) ?? sameAttributes[0];
-}
-
-export function colorMaterialOptionKey(variant: Pick<SelectableProductVariant, "colorMaterialName" | "materialType">) {
-  return `${normalizeOptionIdentity(variant.colorMaterialName)}::${normalizeOptionIdentity(variant.materialType)}`;
-}
-
-function hasCompleteColorMaterial(variant: SelectableProductVariant): variant is SelectableProductVariant & { colorMaterialName: string } {
-  return Boolean(variant.hasColorMaterial && variant.colorMaterialName?.trim() && (variant.colorHex?.trim() || variant.textureImageUrl?.trim()));
-}
-
-function isColorMaterialAttributeKey(key: string) {
-  return ["cor", "color", "material", "tecido", "fabric"].includes(normalizeKey(key));
-}
-
-function normalizeOptionIdentity(value: string | null | undefined) {
-  return (value ?? "").trim().toLocaleLowerCase("pt-BR");
 }
 
 function attributeLabel(key: string, market: "BR" | "US") {

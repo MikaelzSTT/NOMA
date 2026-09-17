@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Link2, LoaderCircle, Save, Search } from "lucide-react";
 import { createManualProductAction } from "@/app/admin/actions";
 import { OfferVariantFields, type AdminOfferVariant } from "@/components/admin/offer-variant-fields";
+import { ProductColorMaterialFields } from "@/components/admin/product-color-material-fields";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { MANUAL_SUPPLIER_OPTION_PREFIX } from "@/lib/admin/manual-product-constants";
 import { previewToOfferVariants } from "@/lib/admin/url-preview-to-variants";
@@ -159,6 +160,8 @@ export function ManualProductForm({ suppliers }: { suppliers: SupplierOption[] }
         <label className="admin-field">Descrição<textarea name="description" rows={6} maxLength={30000} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
         <ProductImageManager key={images.join("\n")} initialImages={images} required />
       </section>
+
+      <ProductColorMaterialFields />
 
       <OfferVariantFields key={variantRevision} currency={currency} initialVariants={variants} />
 

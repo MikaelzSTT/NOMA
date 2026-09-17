@@ -81,6 +81,12 @@ describe("updateInternalProductAction", () => {
     formData.set("pricingRuleType", "");
     formData.set("pricingRuleValue", "");
     formData.set("images", "https://cdn.example.com/cadeira.jpg");
+    formData.set("hasColorMaterialOptions", "true");
+    formData.set("colorMaterialOptionsJson", JSON.stringify([
+      { colorHex: "#B56E3D" },
+      { name: "Bouclé 2286", textureImageUrl: "https://cdn.example.com/boucle.jpg" },
+      {},
+    ]));
     formData.set("variantsJson", JSON.stringify([{
       label: "Padrão",
       sku: "SKU-1-A",
@@ -90,10 +96,6 @@ describe("updateInternalProductAction", () => {
       stock: 4,
       active: true,
       availability: "AVAILABLE",
-      hasColorMaterial: true,
-      colorMaterialName: "Caramelo",
-      materialType: "Couro",
-      colorHex: "#B56E3D",
       isDefault: true,
       manualPriceOverride: true,
     }]));
@@ -105,6 +107,15 @@ describe("updateInternalProductAction", () => {
     expect(mocks.transaction.product.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         estimatedDelivery: null,
+        hasColorMaterialOptions: true,
+        colorMaterialOptions: {
+          deleteMany: {},
+          create: [
+            { colorHex: "#B56E3D", sortOrder: 0 },
+            { name: "Bouclé 2286", textureImageUrl: "https://cdn.example.com/boucle.jpg", sortOrder: 1 },
+            { sortOrder: 2 },
+          ],
+        },
       }),
     }));
     expect(mocks.transaction.productMarketOffer.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -114,14 +125,10 @@ describe("updateInternalProductAction", () => {
         estimatedDeliveryMaxDays: null,
       }),
     }));
-    expect(mocks.transaction.productMarketOfferVariant.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({
-        hasColorMaterial: true,
-        colorMaterialName: "Caramelo",
-        materialType: "Couro",
-        colorHex: "#B56E3D",
-        textureImageUrl: null,
-      })],
-    });
+    const createManyCall = mocks.transaction.productMarketOfferVariant.createMany.mock.calls.at(-1) as unknown as [{ data: Array<Record<string, unknown>> }] | undefined;
+    const variantWrite = createManyCall?.[0].data[0];
+    expect(variantWrite).toMatchObject({ sku: "SKU-1-A", salePrice: 2200, stock: 4 });
+    expect(variantWrite).not.toHaveProperty("colorHex");
+    expect(variantWrite).not.toHaveProperty("textureImageUrl");
   });
 });

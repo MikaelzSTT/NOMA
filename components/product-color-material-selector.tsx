@@ -1,116 +1,67 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
-import type { CatalogProductVariant } from "@/lib/catalog";
+import { useState } from "react";
+import type { CatalogProductColorMaterialOption } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
-import {
-  colorMaterialOptionKey,
-  deriveColorMaterialOptions,
-  deriveVariantGroups,
-  findVariantForColorMaterial,
-  variantIsSelectable,
-} from "@/lib/product-variants";
+import { colorMaterialVisualSource, resolveColorMaterialSelection } from "@/lib/product-color-material-options";
 import styles from "./product-detail.module.css";
 
 export function ProductColorMaterialSelector({
-  variants,
-  selected,
+  options,
   market,
-  onSelectVariant,
 }: {
-  variants: CatalogProductVariant[];
-  selected: CatalogProductVariant | undefined;
+  options: CatalogProductColorMaterialOption[];
   market: Market;
-  onSelectVariant: (variant: CatalogProductVariant) => void;
 }) {
-  const options = useMemo(() => deriveColorMaterialOptions(variants), [variants]);
-  const groups = useMemo(() => deriveVariantGroups(variants, market), [market, variants]);
-  const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState(options[0]?.id ?? null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   if (!options.length) return null;
 
-  const selectedKey = selected?.hasColorMaterial ? colorMaterialOptionKey(selected) : null;
-  const activeKey = previewKey ?? selectedKey;
-  const activeOption = options.find((option) => option.key === activeKey);
-  const activeVariant = activeOption
-    ? findVariantForColorMaterial(variants, groups, selected, activeOption.key)
-    : undefined;
-  const preview = activeOption ? {
-    name: activeVariant?.colorMaterialName ?? activeOption.name,
-    materialType: activeVariant?.materialType ?? activeOption.materialType,
-    colorHex: activeVariant?.colorHex ?? activeOption.colorHex,
-    textureImageUrl: activeVariant?.textureImageUrl ?? activeOption.textureImageUrl,
-  } : null;
+  const { selected, preview } = resolveColorMaterialSelection(options, selectedId, previewId);
+  if (!selected || !preview) return null;
 
   return (
-    <fieldset className={styles.colorMaterialBlock} onMouseLeave={() => setPreviewKey(null)}>
+    <fieldset className={styles.colorMaterialBlock} onMouseLeave={() => setPreviewId(null)}>
       <legend>{market === "US" ? "Color / fabric" : "Cor / tecido"}</legend>
       <div className={styles.materialSwatches}>
-        {options.map((option) => {
-          const candidate = findVariantForColorMaterial(variants, groups, selected, option.key);
-          const isSelected = option.key === selectedKey;
-          const disabled = !candidate || !variantIsSelectable(candidate);
-          const visual = candidate?.hasColorMaterial ? candidate : option;
+        {options.map((option, index) => {
+          const isSelected = option.id === selected.id;
+          const accessibleName = option.name ?? (market === "US" ? `Color or fabric option ${index + 1}` : `Opção de cor ou tecido ${index + 1}`);
           return (
             <button
-              key={option.key}
+              key={option.id}
               type="button"
               className={styles.materialSwatch}
               data-selected={isSelected}
-              disabled={disabled}
-              aria-label={option.name}
+              aria-label={accessibleName}
               aria-pressed={isSelected}
-              title={option.name}
-              onMouseEnter={() => setPreviewKey(option.key)}
-              onFocus={() => setPreviewKey(option.key)}
-              onBlur={() => setPreviewKey(null)}
-              onClick={() => candidate && onSelectVariant(candidate)}
+              title={option.name ?? undefined}
+              onMouseEnter={() => setPreviewId(option.id)}
+              onFocus={() => setPreviewId(option.id)}
+              onBlur={() => setPreviewId(null)}
+              onClick={() => setSelectedId(option.id)}
             >
-              <MaterialVisual
-                name={option.name}
-                textureImageUrl={visual.textureImageUrl}
-                colorHex={visual.colorHex}
-                sizes="3rem"
-              />
+              <MaterialVisual option={option} sizes="3rem" />
             </button>
           );
         })}
       </div>
-      {preview && (
-        <div className={styles.materialPreview} aria-live="polite">
-          <div className={styles.materialPreviewVisual}>
-            <MaterialVisual
-              name={preview.name}
-              textureImageUrl={preview.textureImageUrl}
-              colorHex={preview.colorHex}
-              sizes="8rem"
-            />
-          </div>
-          <div>
-            <strong>{preview.name}</strong>
-            {preview.materialType && <span>{preview.materialType}</span>}
-          </div>
+      <div className={styles.materialPreview} aria-live="polite">
+        <div className={styles.materialPreviewVisual}>
+          <MaterialVisual option={preview} sizes="18rem" />
         </div>
-      )}
+        {preview.name && <strong>{preview.name}</strong>}
+      </div>
     </fieldset>
   );
 }
 
-function MaterialVisual({
-  name,
-  textureImageUrl,
-  colorHex,
-  sizes,
-}: {
-  name: string;
-  textureImageUrl?: string | null;
-  colorHex?: string | null;
-  sizes: string;
-}) {
+function MaterialVisual({ option, sizes }: { option: CatalogProductColorMaterialOption; sizes: string }) {
+  const visual = colorMaterialVisualSource(option);
   return (
-    <span className={styles.materialVisual} style={{ backgroundColor: colorHex ?? "#E9E4DA" }}>
-      {textureImageUrl && <Image src={textureImageUrl} alt="" fill sizes={sizes} className={styles.materialTexture} />}
-      <span className="sr-only">{name}</span>
+    <span className={styles.materialVisual} style={{ backgroundColor: visual?.kind === "color" ? visual.value : option.colorHex ?? undefined }}>
+      {visual?.kind === "texture" && <Image src={visual.value} alt="" fill sizes={sizes} className={styles.materialTexture} />}
     </span>
   );
 }

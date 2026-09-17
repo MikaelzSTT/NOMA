@@ -121,60 +121,6 @@ describe("upsertCatalogProduct", () => {
       stock: 4,
       active: true,
       availability: "AVAILABLE",
-      hasColorMaterial: false,
-    });
-  });
-
-  it("preserva cor/material manual quando a sincronização não traz esses dados", async () => {
-    mockExistingOffer({
-      variants: [{
-        sku: "SUP-URL-1-P",
-        active: true,
-        availability: "AVAILABLE",
-        salePrice: 900,
-        manualPriceOverride: false,
-        hasColorMaterial: true,
-        colorMaterialName: "Pele 10BU",
-        materialType: "Couro",
-        colorHex: "#9A7657",
-        textureImageUrl: "https://cdn.example.com/pele-10bu.jpg",
-      }],
-    });
-
-    await upsertCatalogProduct(
-      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
-      productWithVariants([{ sku: "SUP-URL-1-P", stock: 5 }]),
-      { market: "BR", preserveManualPrice: true, preserveSupplierDataWhenMissing: true },
-    );
-
-    expect(updatedOfferVariants()[0]).toMatchObject({
-      hasColorMaterial: true,
-      colorMaterialName: "Pele 10BU",
-      materialType: "Couro",
-      colorHex: "#9A7657",
-      textureImageUrl: "https://cdn.example.com/pele-10bu.jpg",
-    });
-  });
-
-  it("recebe cor/material quando um importador passar os campos normalizados", async () => {
-    await upsertCatalogProduct(
-      { id: "supplier-1", name: "Fornecedor", adapterKey: "supplier", supportedMarkets: ["BR"] },
-      productWithVariants([{
-        sku: "SUP-URL-1-P",
-        stock: 5,
-        hasColorMaterial: true,
-        colorMaterialName: "Linho Bege",
-        materialType: "Linho",
-        colorHex: "#D8C3A5",
-      }]),
-      { market: "BR" },
-    );
-
-    expect(createdOfferVariants()[0]).toMatchObject({
-      hasColorMaterial: true,
-      colorMaterialName: "Linho Bege",
-      materialType: "Linho",
-      colorHex: "#D8C3A5",
     });
   });
 
@@ -377,11 +323,7 @@ describe("upsertCatalogProduct", () => {
   });
 });
 
-function productWithVariants(variants: Array<{
-  sku: string; stock: number; active?: boolean; availability?: NormalizedSupplierProduct["availability"];
-  title?: string; options?: Record<string, string>; hasColorMaterial?: boolean; colorMaterialName?: string;
-  materialType?: string; colorHex?: string; textureImageUrl?: string;
-}>) {
+function productWithVariants(variants: Array<{ sku: string; stock: number; active?: boolean; availability?: NormalizedSupplierProduct["availability"]; title?: string; options?: Record<string, string> }>) {
   return {
     ...product,
     variants: variants.map((variant) => ({
@@ -393,11 +335,6 @@ function productWithVariants(variants: Array<{
       stock: variant.stock,
       active: variant.active,
       availability: variant.availability,
-      hasColorMaterial: variant.hasColorMaterial,
-      colorMaterialName: variant.colorMaterialName,
-      materialType: variant.materialType,
-      colorHex: variant.colorHex,
-      textureImageUrl: variant.textureImageUrl,
     })),
   } satisfies NormalizedSupplierProduct;
 }
@@ -405,11 +342,7 @@ function productWithVariants(variants: Array<{
 function mockExistingOffer(overrides: {
   manualPriceOverride?: boolean;
   sellingPrice?: number;
-  variants: Array<{
-    sku: string; stock?: number; active: boolean; availability: string; salePrice: number;
-    manualPriceOverride: boolean; manualActiveOverride?: boolean; hasColorMaterial?: boolean;
-    colorMaterialName?: string; materialType?: string; colorHex?: string; textureImageUrl?: string;
-  }>;
+  variants: Array<{ sku: string; stock?: number; active: boolean; availability: string; salePrice: number; manualPriceOverride: boolean; manualActiveOverride?: boolean }>;
 }) {
   mocks.transaction.productMarketOffer.findUnique.mockResolvedValue({
     id: "offer-1",

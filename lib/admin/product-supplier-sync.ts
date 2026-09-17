@@ -180,11 +180,6 @@ function previewToSupplierProduct(
       availability,
       sourceUrl: normalizeSourceUrl(variant.sourceUrl) ?? sourceUrl,
       imageUrl: normalizeSourceUrl(variant.imageUrl) ?? existing?.imageUrl ?? undefined,
-      hasColorMaterial: variant.hasColorMaterial,
-      colorMaterialName: variant.colorMaterialName,
-      materialType: variant.materialType,
-      colorHex: variant.colorHex,
-      textureImageUrl: normalizeSourceUrl(variant.textureImageUrl),
     };
   });
   const defaultVariant = variants[0];

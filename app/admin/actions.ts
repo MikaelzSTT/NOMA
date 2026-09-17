@@ -89,10 +89,18 @@ const optionalMoney = z.preprocess((value) => value === "" ? undefined : value, 
 const requiredMoney = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().nonnegative());
 const optionalDeliveryDays = z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().nonnegative().optional());
 const availabilitySchema = z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN"]);
-const variantSchema = z.preprocess((value) => {
-  if (!value || typeof value !== "object" || Array.isArray(value) || (value as { hasColorMaterial?: unknown }).hasColorMaterial === true) return value;
-  return { ...value, colorMaterialName: undefined, materialType: undefined, colorHex: undefined, textureImageUrl: undefined };
-}, z.object({
+const optionalString = (max: number) => z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(max).optional());
+const optionalImageUrl = z.preprocess((value) => value === "" ? undefined : value, imageUrl.optional());
+const colorMaterialOptionSchema = z.object({
+  name: optionalString(160),
+  colorHex: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().trim().regex(/^#[0-9a-f]{6}$/i).transform((value) => value.toUpperCase()).optional(),
+  ),
+  textureImageUrl: optionalImageUrl,
+});
+const colorMaterialOptionsSchema = z.array(colorMaterialOptionSchema).max(100);
+const variantSchema = z.object({
   label: z.string().trim().min(1).max(300),
   sku: z.string().trim().max(255).optional(),
   attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
@@ -105,21 +113,8 @@ const variantSchema = z.preprocess((value) => {
   availability: availabilitySchema,
   sourceUrl: sourceUrl.optional(),
   imageUrl: imageUrl.optional(),
-  hasColorMaterial: z.boolean().default(false),
-  colorMaterialName: z.string().trim().min(1).max(160).optional(),
-  materialType: z.string().trim().min(1).max(120).optional(),
-  colorHex: z.string().trim().regex(/^#[0-9a-f]{6}$/i).transform((value) => value.toUpperCase()).optional(),
-  textureImageUrl: imageUrl.optional(),
   isDefault: z.boolean().default(false),
-}).superRefine((variant, context) => {
-  if (!variant.hasColorMaterial) return;
-  if (!variant.colorMaterialName) {
-    context.addIssue({ code: "custom", path: ["colorMaterialName"], message: "Informe o nome da cor/material." });
-  }
-  if (!variant.colorHex && !variant.textureImageUrl) {
-    context.addIssue({ code: "custom", path: ["colorHex"], message: "Informe uma cor HEX ou imagem de textura." });
-  }
-}));
+});
 const variantsSchema = z.array(variantSchema).min(1).max(200).transform((variants) => {
   const defaultIndex = Math.max(0, variants.findIndex((variant) => variant.isDefault));
   return variants.map((variant, index) => ({ ...variant, isDefault: index === defaultIndex }));
@@ -148,6 +143,8 @@ const createManualProductSchema = z.object({
   featured: z.boolean().default(false),
   active: z.boolean().default(false),
   manualPriceOverride: z.boolean().default(true),
+  hasColorMaterialOptions: z.boolean().default(false),
+  colorMaterialOptions: colorMaterialOptionsSchema,
   variants: variantsSchema,
 }).refine((value) => value.estimatedDeliveryMaxDays == null || value.estimatedDeliveryMinDays == null || value.estimatedDeliveryMaxDays >= value.estimatedDeliveryMinDays, {
   path: ["estimatedDeliveryMaxDays"],
@@ -156,7 +153,8 @@ const createManualProductSchema = z.object({
 export async function createManualProductAction(formData: FormData) {
   await requireAdmin();
   const variants = parseVariants(formData);
-  if (!variants) redirect("/admin/produtos/novo?saved=error");
+  const colorMaterialOptions = parseColorMaterialOptions(formData);
+  if (!variants || !colorMaterialOptions) redirect("/admin/produtos/novo?saved=error");
   const parsed = createManualProductSchema.safeParse({
     ...Object.fromEntries(formData),
     description: String(formData.get("description") ?? "").trim() || undefined,
@@ -165,6 +163,8 @@ export async function createManualProductAction(formData: FormData) {
     featured: formData.get("featured") === "true",
     active: formData.get("active") === "true",
     manualPriceOverride: formData.get("manualPriceOverride") === "true",
+    hasColorMaterialOptions: formData.get("hasColorMaterialOptions") === "true",
+    colorMaterialOptions,
     variants,
   });
   if (!parsed.success) redirect(`/admin/produtos/novo?saved=${hasPendingSalePriceIssue(parsed.error) ? "sale-price-required" : "error"}`);
@@ -205,6 +205,8 @@ const editProductSchema = z.object({
   pricingRuleValue: optionalMoney,
   manualPriceOverride: z.boolean().default(false),
   images: z.array(imageUrl).max(30),
+  hasColorMaterialOptions: z.boolean().default(false),
+  colorMaterialOptions: colorMaterialOptionsSchema,
   variants: variantsSchema,
   internalNotes: z.string().trim().max(2_000).optional(),
   popularityScore: z.coerce.number().int().min(0).max(1_000_000),
@@ -218,7 +220,8 @@ export async function updateInternalProductAction(formData: FormData) {
   await requireAdmin();
   const raw = Object.fromEntries(formData);
   const variants = parseVariants(formData);
-  if (!variants) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=error`);
+  const rawColorMaterialOptions = parseColorMaterialOptions(formData);
+  if (!variants || !rawColorMaterialOptions) redirect(`/admin/produtos/${String(formData.get("id"))}?saved=error`);
   const parsed = editProductSchema.safeParse({
     ...raw,
     sourceUrl: String(formData.get("sourceUrl") ?? "").trim() || undefined,
@@ -231,6 +234,8 @@ export async function updateInternalProductAction(formData: FormData) {
     internalNotes: String(formData.get("internalNotes") ?? "").trim() || undefined,
     images: String(formData.get("images") ?? "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
     variants,
+    hasColorMaterialOptions: formData.get("hasColorMaterialOptions") === "true",
+    colorMaterialOptions: rawColorMaterialOptions,
     manualPriceOverride: formData.get("manualPriceOverride") === "true",
     active: formData.get("active") === "true",
     featured: formData.get("featured") === "true",
@@ -242,6 +247,8 @@ export async function updateInternalProductAction(formData: FormData) {
     category: categorySlug,
     brand: brandName,
     images,
+    hasColorMaterialOptions,
+    colorMaterialOptions,
     variants: offerVariants,
     estimatedDeliveryMinDays,
     estimatedDeliveryMaxDays,
@@ -305,6 +312,11 @@ export async function updateInternalProductAction(formData: FormData) {
         } : {}),
         categoryId: category.id,
         brandId: brand?.id ?? null,
+        hasColorMaterialOptions,
+        colorMaterialOptions: {
+          deleteMany: {},
+          create: colorMaterialOptions.map((option, sortOrder) => ({ ...option, sortOrder })),
+        },
         ...(market === "BR" ? { images: { deleteMany: {}, create: images.map((url, position) => ({ url, sourceUrl: url, ...productImageStorageFields(url), position, isPrimary: position === 0, alt: input.title })) } } : {}),
       },
     });
@@ -361,11 +373,6 @@ export async function updateInternalProductAction(formData: FormData) {
         availability: variant.availability,
         sourceUrl: variant.sourceUrl ?? null,
         imageUrl: variant.imageUrl ?? null,
-        hasColorMaterial: variant.hasColorMaterial,
-        colorMaterialName: variant.hasColorMaterial ? variant.colorMaterialName ?? null : null,
-        materialType: variant.hasColorMaterial ? variant.materialType ?? null : null,
-        colorHex: variant.hasColorMaterial ? variant.colorHex ?? null : null,
-        textureImageUrl: variant.hasColorMaterial ? variant.textureImageUrl ?? null : null,
         isDefault: variant.isDefault,
         position,
       })),
@@ -480,6 +487,15 @@ export async function saveSupplierAction(formData: FormData) {
 function parseVariants(formData: FormData) {
   try {
     const value = JSON.parse(String(formData.get("variantsJson") ?? "[]")) as unknown;
+    return Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseColorMaterialOptions(formData: FormData) {
+  try {
+    const value = JSON.parse(String(formData.get("colorMaterialOptionsJson") ?? "[]")) as unknown;
     return Array.isArray(value) ? value : null;
   } catch {
     return null;

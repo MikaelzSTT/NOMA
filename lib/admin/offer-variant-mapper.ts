@@ -16,11 +16,6 @@ type AdminOfferVariantRow = {
   availability?: string | null;
   sourceUrl?: string | null;
   imageUrl?: string | null;
-  hasColorMaterial?: boolean | null;
-  colorMaterialName?: string | null;
-  materialType?: string | null;
-  colorHex?: string | null;
-  textureImageUrl?: string | null;
   isDefault?: boolean | null;
 };
 
@@ -71,11 +66,6 @@ export function toAdminOfferVariants(
         availability: safeAvailability(variant.availability, stock > 0 ? "AVAILABLE" : "OUT_OF_STOCK"),
         sourceUrl: safeText(variant.sourceUrl, ""),
         imageUrl: safeText(variant.imageUrl, ""),
-        hasColorMaterial: safeBoolean(variant.hasColorMaterial, false),
-        colorMaterialName: safeText(variant.colorMaterialName, ""),
-        materialType: safeText(variant.materialType, ""),
-        colorHex: safeText(variant.colorHex, ""),
-        textureImageUrl: safeText(variant.textureImageUrl, ""),
         isDefault: safeBoolean(variant.isDefault, index === 0),
       };
     });
@@ -97,11 +87,6 @@ export function toAdminOfferVariants(
     availability: safeAvailability(offer?.availability ?? product.availability, stock > 0 ? "AVAILABLE" : "OUT_OF_STOCK"),
     sourceUrl: safeText(offer?.sourceUrl, ""),
     imageUrl: "",
-    hasColorMaterial: false,
-    colorMaterialName: "",
-    materialType: "",
-    colorHex: "",
-    textureImageUrl: "",
     isDefault: true,
   }];
 }

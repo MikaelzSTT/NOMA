@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { Market } from "@/lib/market";
 import { imageDedupeKey } from "@/lib/product-gallery-images";
+import { isDisplayableColorMaterialOption } from "@/lib/product-color-material-options";
 import type { ProductFilters } from "@/lib/validation/product";
 
 const offerSelect = {
@@ -34,9 +35,7 @@ const offerSelect = {
     where: { active: true },
     select: {
       id: true, label: true, sku: true, attributes: true, salePrice: true, compareAtPrice: true,
-      stock: true, availability: true, imageUrl: true, hasColorMaterial: true,
-      colorMaterialName: true, materialType: true, colorHex: true, textureImageUrl: true,
-      isDefault: true, position: true,
+      stock: true, availability: true, imageUrl: true, isDefault: true, position: true,
     },
     orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
   },
@@ -55,12 +54,17 @@ const offerSelect = {
       rating: true,
       reviewCount: true,
       installmentText: true,
+      hasColorMaterialOptions: true,
       updatedAt: true,
       categoryId: true,
       brandId: true,
       category: { select: { id: true, name: true, slug: true } },
       brand: { select: { id: true, name: true, slug: true } },
       images: { select: { id: true, url: true, alt: true, position: true, isPrimary: true }, orderBy: [{ isPrimary: "desc" as const }, { position: "asc" as const }] },
+      colorMaterialOptions: {
+        select: { id: true, name: true, colorHex: true, textureImageUrl: true },
+        orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+      },
       variants: {
         where: { active: true },
         select: { id: true, sku: true, title: true, options: true, sellingPrice: true, stock: true },
@@ -105,6 +109,14 @@ export interface CatalogProduct {
   brand: { id: string; name: string; slug: string } | null;
   images: Array<{ id: string; url: string; alt: string | null; position: number }>;
   variants: CatalogProductVariant[];
+  colorMaterialOptions: CatalogProductColorMaterialOption[];
+}
+
+export interface CatalogProductColorMaterialOption {
+  id: string;
+  name: string | null;
+  colorHex: string | null;
+  textureImageUrl: string | null;
 }
 
 export interface CatalogProductVariant {
@@ -117,11 +129,6 @@ export interface CatalogProductVariant {
   stock: number;
   availability: string;
   imageUrl: string | null;
-  hasColorMaterial: boolean;
-  colorMaterialName: string | null;
-  materialType: string | null;
-  colorHex: string | null;
-  textureImageUrl: string | null;
   isDefault: boolean;
 }
 
@@ -324,11 +331,6 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     stock: variant.stock,
     availability: variant.availability,
     imageUrl: variant.imageUrl,
-    hasColorMaterial: Boolean(variant.hasColorMaterial),
-    colorMaterialName: variant.colorMaterialName ?? null,
-    materialType: variant.materialType ?? null,
-    colorHex: variant.colorHex ?? null,
-    textureImageUrl: variant.textureImageUrl ?? null,
     isDefault: variant.isDefault,
   }));
   const defaultOfferVariant = offerVariants.find((variant) => variant.isDefault) ?? offerVariants[0];
@@ -371,6 +373,14 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     category: product.category,
     brand: product.brand,
     images,
+    colorMaterialOptions: product.hasColorMaterialOptions
+      ? product.colorMaterialOptions.flatMap((option) => {
+        const textureImageUrl = option.textureImageUrl?.trim() || null;
+        const colorHex = option.colorHex?.trim() || null;
+        const normalized = { id: option.id, name: option.name?.trim() || null, colorHex, textureImageUrl };
+        return isDisplayableColorMaterialOption(normalized) ? [normalized] : [];
+      })
+      : [],
     variants: offerVariants.length ? offerVariants : (product.variants ?? []).map((variant, index) => ({
       id: variant.id,
       label: variant.title,
@@ -381,11 +391,6 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
       stock: variant.stock,
       availability: variant.stock > 0 ? "AVAILABLE" : "OUT_OF_STOCK",
       imageUrl: null,
-      hasColorMaterial: false,
-      colorMaterialName: null,
-      materialType: null,
-      colorHex: null,
-      textureImageUrl: null,
       isDefault: index === 0,
     })),
   };

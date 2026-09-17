@@ -17,7 +17,6 @@ const preview = {
       label: "Solteiro",
       sku: "VEGAS-SOL",
       attributes: { tamanho: "Solteiro" },
-      hasColorMaterial: false,
       sourcePrice: 900,
       compareAtPrice: 1200,
       currency: "BRL",
@@ -86,28 +85,6 @@ describe("preview de URL para variantes comerciais", () => {
       active: true,
       stock: 0,
       availability: "OUT_OF_STOCK",
-    });
-  });
-
-  it("aceita metadados futuros de cor/material sem afetar fornecedores atuais", () => {
-    const variants = previewToOfferVariants({
-      ...preview,
-      variants: [{
-        ...preview.variants[0],
-        hasColorMaterial: true,
-        colorMaterialName: "Pele 10BU",
-        materialType: "Couro",
-        colorHex: "#9A7657",
-        textureImageUrl: "https://cdn.example.com/pele-10bu.jpg",
-      }],
-    }, "BRL");
-
-    expect(variants[0]).toMatchObject({
-      hasColorMaterial: true,
-      colorMaterialName: "Pele 10BU",
-      materialType: "Couro",
-      colorHex: "#9A7657",
-      textureImageUrl: "https://cdn.example.com/pele-10bu.jpg",
     });
   });
 });

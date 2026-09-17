@@ -27,11 +27,6 @@ export interface NormalizedVariant {
   availability?: NormalizedAvailability;
   sourceUrl?: string;
   imageUrl?: string;
-  hasColorMaterial?: boolean;
-  colorMaterialName?: string;
-  materialType?: string;
-  colorHex?: string;
-  textureImageUrl?: string;
 }
 
 /** Formato unico aceito pelo catalogo, independentemente da fonte. */

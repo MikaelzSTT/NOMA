@@ -162,12 +162,12 @@
 }
 
 .materialSwatch {
-  width: 3rem;
-  height: 3rem;
+  width: 3.1rem;
+  height: 3.1rem;
   flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--noma-line);
-  border-radius: 50%;
+  border-radius: 0.2rem;
   background: var(--noma-card);
   padding: 0.2rem;
   transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
@@ -188,12 +188,6 @@
   box-shadow: 0 0 0 2px var(--noma-paper), 0 0 0 3px var(--noma-ink);
 }
 
-.materialSwatch:disabled {
-  cursor: not-allowed;
-  filter: grayscale(0.7);
-  opacity: 0.32;
-}
-
 .materialVisual {
   position: relative;
   display: block;
@@ -208,21 +202,18 @@
 }
 
 .materialPreview {
-  display: grid;
-  min-height: 7.5rem;
-  max-width: 28rem;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: 1rem;
+  display: flex;
+  width: min(100%, 22rem);
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--noma-line);
   background: rgba(255, 253, 250, 0.64);
-  padding: 0.65rem;
 }
 
 .materialPreviewVisual {
-  width: 7.5rem;
-  height: 6.2rem;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1.65 / 1;
   overflow: hidden;
   background: #e9e4da;
 }
@@ -233,15 +224,10 @@
 }
 
 .materialPreview strong {
+  padding: 0.8rem 0.9rem;
   color: var(--noma-ink);
   font-size: 0.86rem;
   font-weight: 680;
-}
-
-.materialPreview > div:last-child > span {
-  margin-top: 0.35rem;
-  color: var(--noma-muted);
-  font-size: 0.72rem;
 }
 
 .rating {
@@ -707,8 +693,7 @@
   .summary { padding-top: 0.75rem; }
   .title { font-size: clamp(2.25rem, 11vw, 3.2rem); }
   .colorMaterialBlock { margin-top: 1.25rem; }
-  .materialPreview { max-width: none; grid-template-columns: 6.5rem minmax(0, 1fr); }
-  .materialPreviewVisual { width: 6.5rem; height: 5.5rem; }
+  .materialPreview { width: 100%; }
   .description { margin-top: 1.35rem; }
   .variantChip { min-height: 2.8rem; }
   .shippingFormRow,

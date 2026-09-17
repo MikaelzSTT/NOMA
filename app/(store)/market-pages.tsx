@@ -83,6 +83,7 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
           sprite={sprite}
           market={market}
           variants={product.variants}
+          colorMaterialOptions={product.colorMaterialOptions}
           fallback={{
             sellingPrice: product.sellingPrice,
             compareAtPrice: product.compareAtPrice,

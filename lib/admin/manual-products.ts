@@ -29,7 +29,15 @@ export interface ManualProductInput {
   featured: boolean;
   active: boolean;
   manualPriceOverride?: boolean;
+  hasColorMaterialOptions?: boolean;
+  colorMaterialOptions?: ManualColorMaterialOptionInput[];
   variants?: ManualOfferVariantInput[];
+}
+
+export interface ManualColorMaterialOptionInput {
+  name?: string;
+  colorHex?: string;
+  textureImageUrl?: string;
 }
 
 export interface ManualOfferVariantInput {
@@ -45,16 +53,11 @@ export interface ManualOfferVariantInput {
   availability: "AVAILABLE" | "OUT_OF_STOCK" | "PREORDER" | "UNKNOWN";
   sourceUrl?: string;
   imageUrl?: string;
-  hasColorMaterial?: boolean;
-  colorMaterialName?: string;
-  materialType?: string;
-  colorHex?: string;
-  textureImageUrl?: string;
   isDefault?: boolean;
 }
 
 export class ManualProductError extends Error {
-  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required" | "delivery-window-invalid" | "color-material-invalid") {
+  constructor(readonly code: "invalid-supplier" | "slug-in-use" | "sale-price-required" | "delivery-window-invalid") {
     super(code);
   }
 }
@@ -96,7 +99,6 @@ export async function createManualProduct(input: ManualProductInput) {
     const estimatedDelivery = deliveryLabel(input.market, estimatedDeliveryMinDays, estimatedDeliveryMaxDays);
     const variants = normalizeManualOfferVariants(input);
     if (hasActiveVariantWithoutSalePrice(variants)) throw new ManualProductError("sale-price-required");
-    if (hasInvalidColorMaterial(variants)) throw new ManualProductError("color-material-invalid");
     const defaultVariant = variants.find((variant) => variant.isDefault) ?? variants[0];
     const manualPriceOverride = variants.some((variant) => variant.manualPriceOverride);
     const discountPercent = calculateDiscount(defaultVariant.salePrice, defaultVariant.compareAtPrice);
@@ -141,6 +143,10 @@ export async function createManualProduct(input: ManualProductInput) {
         categoryId: category.id,
         brandId: brand?.id ?? null,
         images: { create: images },
+        hasColorMaterialOptions: input.hasColorMaterialOptions ?? false,
+        colorMaterialOptions: {
+          create: (input.colorMaterialOptions ?? []).map((option, sortOrder) => ({ ...option, sortOrder })),
+        },
       },
     });
     const offer = await transaction.productMarketOffer.create({
@@ -188,11 +194,6 @@ export async function createManualProduct(input: ManualProductInput) {
             availability: variant.availability,
             sourceUrl: variant.sourceUrl ?? null,
             imageUrl: variant.imageUrl ?? null,
-            hasColorMaterial: variant.hasColorMaterial,
-            colorMaterialName: variant.hasColorMaterial ? variant.colorMaterialName ?? null : null,
-            materialType: variant.hasColorMaterial ? variant.materialType ?? null : null,
-            colorHex: variant.hasColorMaterial ? variant.colorHex ?? null : null,
-            textureImageUrl: variant.hasColorMaterial ? variant.textureImageUrl ?? null : null,
             isDefault: variant.isDefault,
             position,
           })),
@@ -217,14 +218,6 @@ export async function createManualProduct(input: ManualProductInput) {
 
 function hasActiveVariantWithoutSalePrice(variants: Array<ManualOfferVariantInput & { isDefault: boolean }>) {
   return variants.some((variant) => variant.active && variant.costPrice > 0 && variant.salePrice <= 0);
-}
-
-function hasInvalidColorMaterial(variants: Array<ManualOfferVariantInput & { isDefault: boolean }>) {
-  return variants.some((variant) => variant.hasColorMaterial && (
-    !variant.colorMaterialName
-    || (!variant.colorHex && !variant.textureImageUrl)
-    || Boolean(variant.colorHex && !/^#[0-9A-F]{6}$/.test(variant.colorHex))
-  ));
 }
 
 async function resolveSupplier(
@@ -291,11 +284,6 @@ function normalizeManualOfferVariants(input: ManualProductInput): Array<ManualOf
     availability: input.availability,
     sourceUrl: undefined,
     imageUrl: undefined,
-    hasColorMaterial: false,
-    colorMaterialName: undefined,
-    materialType: undefined,
-    colorHex: undefined,
-    textureImageUrl: undefined,
     isDefault: true,
   }];
   const defaultIndex = Math.max(0, sourceVariants.findIndex((variant) => variant.isDefault));
@@ -304,11 +292,6 @@ function normalizeManualOfferVariants(input: ManualProductInput): Array<ManualOf
     const salePrice = !manualPriceOverride && input.market === "BR" && variant.costPrice > 0
       ? calculateNomaBrSalePrice({ costPrice: variant.costPrice, compareAtPrice: variant.compareAtPrice }).salePrice
       : variant.salePrice;
-    const hasColorMaterial = variant.hasColorMaterial ?? false;
-    const colorMaterialName = optionalText(variant.colorMaterialName);
-    const materialType = optionalText(variant.materialType);
-    const colorHex = optionalText(variant.colorHex)?.toUpperCase();
-    const textureImageUrl = optionalText(variant.textureImageUrl);
     return {
       label: variant.label,
       sku: variant.sku,
@@ -322,17 +305,7 @@ function normalizeManualOfferVariants(input: ManualProductInput): Array<ManualOf
       availability: variant.availability,
       sourceUrl: variant.sourceUrl ? normalizeSourceUrl(variant.sourceUrl) : undefined,
       imageUrl: variant.imageUrl,
-      hasColorMaterial,
-      colorMaterialName: hasColorMaterial ? colorMaterialName : undefined,
-      materialType: hasColorMaterial ? materialType : undefined,
-      colorHex: hasColorMaterial ? colorHex : undefined,
-      textureImageUrl: hasColorMaterial ? textureImageUrl : undefined,
       isDefault: index === defaultIndex,
     };
   });
-}
-
-function optionalText(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed || undefined;
 }

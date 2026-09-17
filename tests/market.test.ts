@@ -61,24 +61,33 @@ describe("mercados públicos", () => {
     expect(product?.variants[0]).not.toHaveProperty("costPrice");
   });
 
-  it("expõe cor/material somente como metadado opcional da variante", async () => {
-    const withoutMaterial = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
-    expect(withoutMaterial?.variants[0]).toMatchObject({ hasColorMaterial: false, colorMaterialName: null });
+  it("expõe somente opções visuais válidas do produto sem alterar dados comerciais", async () => {
+    const withoutOptions = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+    expect(withoutOptions?.colorMaterialOptions).toEqual([]);
 
-    Object.assign(mocks.brOffer.variants[0]!, {
-      hasColorMaterial: true,
-      colorMaterialName: "Bouclé Off White",
-      materialType: "Bouclé",
-      colorHex: "#F1EBDD",
-      textureImageUrl: "https://cdn.example.com/boucle.jpg",
+    Object.assign(mocks.brOffer.product, {
+      colorMaterialOptions: [
+        { id: "hex", name: null, colorHex: "#F1EBDD", textureImageUrl: null },
+        { id: "texture", name: null, colorHex: null, textureImageUrl: "https://cdn.example.com/textura.jpg" },
+        { id: "named", name: "Bouclé 2286", colorHex: "#FFFFFF", textureImageUrl: "https://cdn.example.com/boucle.jpg" },
+        { id: "empty", name: null, colorHex: null, textureImageUrl: null },
+        { id: "name-only", name: "Sem amostra", colorHex: null, textureImageUrl: null },
+      ],
     });
-    const withMaterial = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+    const disabledOptions = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+    expect(disabledOptions?.colorMaterialOptions).toEqual([]);
 
-    expect(withMaterial?.variants[0]).toMatchObject({
-      hasColorMaterial: true,
-      colorMaterialName: "Bouclé Off White",
-      textureImageUrl: "https://cdn.example.com/boucle.jpg",
-    });
+    Object.assign(mocks.brOffer.product, { hasColorMaterialOptions: true });
+    const withOptions = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
+
+    expect(withOptions?.colorMaterialOptions).toEqual([
+      { id: "hex", name: null, colorHex: "#F1EBDD", textureImageUrl: null },
+      { id: "texture", name: null, colorHex: null, textureImageUrl: "https://cdn.example.com/textura.jpg" },
+      { id: "named", name: "Bouclé 2286", colorHex: "#FFFFFF", textureImageUrl: "https://cdn.example.com/boucle.jpg" },
+    ]);
+    expect(withOptions?.variants[0]).toMatchObject({ id: "variant-BR", sku: "SKU-1-A", salePrice: 8940, stock: 3 });
+    expect(withOptions?.variants[0]).not.toHaveProperty("colorHex");
+    expect(withOptions?.variants[0]).not.toHaveProperty("textureImageUrl");
   });
 
   it("usa prazo cadastrado como fallback mesmo quando fornecedor usa cotacao dinamica", async () => {
@@ -209,12 +218,14 @@ function offerRow(market: "BR" | "US", slug: string, currency: "BRL" | "USD", se
       rating: null,
       reviewCount: null,
       installmentText: null,
+      hasColorMaterialOptions: false,
       updatedAt: new Date("2026-01-01"),
       categoryId: "cat-1",
       brandId: null,
       category: { id: "cat-1", name: "Sofas", slug: "sofas" },
       brand: null,
       images: [{ id: "image-1", url: "/images/noma/products.webp", alt: "Sofa", position: 0 }],
+      colorMaterialOptions: [],
       variants: [],
     },
     variants: [{

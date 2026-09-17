@@ -11,10 +11,7 @@ const httpOrLocalUrl = z.string().trim().min(1).refine((value) => {
 }, "Use uma URL HTTP/HTTPS ou um caminho local iniciado por /");
 const imageUrl = httpOrLocalUrl.refine((value) => value.startsWith("/") || value.startsWith("https://"), "Imagens externas devem usar HTTPS");
 
-export const normalizedVariantSchema = z.preprocess((value) => {
-  if (!value || typeof value !== "object" || Array.isArray(value) || (value as { hasColorMaterial?: unknown }).hasColorMaterial !== false) return value;
-  return { ...value, colorMaterialName: undefined, materialType: undefined, colorHex: undefined, textureImageUrl: undefined };
-}, z.object({
+export const normalizedVariantSchema = z.object({
   supplierVariantId: z.string().trim().max(255).optional(),
   sku: z.string().trim().min(1).max(255),
   title: z.string().trim().min(1).max(300),
@@ -27,20 +24,7 @@ export const normalizedVariantSchema = z.preprocess((value) => {
   availability: z.enum(["AVAILABLE", "OUT_OF_STOCK", "PREORDER", "UNKNOWN", "REMOVED"]).optional(),
   sourceUrl: httpOrLocalUrl.optional(),
   imageUrl: imageUrl.optional(),
-  hasColorMaterial: z.boolean().optional(),
-  colorMaterialName: z.string().trim().min(1).max(160).optional(),
-  materialType: z.string().trim().min(1).max(120).optional(),
-  colorHex: z.string().trim().regex(/^#[0-9a-f]{6}$/i).transform((value) => value.toUpperCase()).optional(),
-  textureImageUrl: imageUrl.optional(),
-}).superRefine((variant, context) => {
-  if (!variant.hasColorMaterial) return;
-  if (!variant.colorMaterialName) {
-    context.addIssue({ code: "custom", path: ["colorMaterialName"], message: "Informe o nome da cor/material." });
-  }
-  if (!variant.colorHex && !variant.textureImageUrl) {
-    context.addIssue({ code: "custom", path: ["colorHex"], message: "Informe uma cor HEX ou imagem de textura." });
-  }
-}));
+});
 
 export const normalizedSupplierProductSchema = z.object({
   supplierProductId: z.string().trim().min(1).max(255),

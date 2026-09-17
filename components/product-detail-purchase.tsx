@@ -8,7 +8,7 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
 import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
-import type { CatalogProductVariant } from "@/lib/catalog";
+import type { CatalogProductColorMaterialOption, CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
 import type { ProductCategorySlug } from "@/lib/product-categories";
 import { variantIsSelectable } from "@/lib/product-variants";
@@ -30,6 +30,7 @@ interface ProductDetailPurchaseProps {
   installmentText: string | null;
   sprite?: { column: number; row: number };
   variants: CatalogProductVariant[];
+  colorMaterialOptions: CatalogProductColorMaterialOption[];
   fallback: {
     sellingPrice: number | null;
     compareAtPrice: number | null;
@@ -57,6 +58,7 @@ export function ProductDetailPurchase({
   installmentText,
   sprite,
   variants,
+  colorMaterialOptions,
   fallback,
   market,
 }: ProductDetailPurchaseProps) {
@@ -107,9 +109,7 @@ export function ProductDetailPurchase({
         <h1 className={styles.title}>{name}</h1>
         <ProductColorMaterialSelector
           market={market}
-          variants={variants}
-          selected={selectedVariant}
-          onSelectVariant={handleSelectVariant}
+          options={colorMaterialOptions}
         />
         <div className={styles.rating}><Rating value={rating} count={reviewCount} market={market} /></div>
         {shortDescription && <p className={styles.description}>{shortDescription}</p>}

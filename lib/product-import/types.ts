@@ -19,11 +19,6 @@ export interface ImportedProductVariant {
   availability: ImportedAvailability;
   sourceUrl?: string;
   imageUrl?: string;
-  hasColorMaterial?: boolean;
-  colorMaterialName?: string;
-  materialType?: string;
-  colorHex?: string;
-  textureImageUrl?: string;
 }
 
 export interface ProductUrlImportPreview {

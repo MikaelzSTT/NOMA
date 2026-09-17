@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, ExternalLink, Save } from "lucide-react";
 import { notFound } from "next/navigation";
 import { updateInternalProductAction } from "@/app/admin/actions";
 import { OfferVariantFields } from "@/components/admin/offer-variant-fields";
+import { ProductColorMaterialFields } from "@/components/admin/product-color-material-fields";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { SupplierSyncButton } from "@/components/admin/supplier-sync-button";
 import { toAdminOfferVariants } from "@/lib/admin/offer-variant-mapper";
@@ -35,12 +36,17 @@ const productEditSelect = {
   featured: true,
   popularityScore: true,
   internalNotes: true,
+  hasColorMaterialOptions: true,
   syncStatus: true,
   lastSyncedAt: true,
   supplier: { select: { name: true, adapterKey: true } },
   category: { select: { name: true, slug: true } },
   brand: { select: { name: true } },
   images: { select: { url: true }, orderBy: { position: "asc" as const } },
+  colorMaterialOptions: {
+    select: { name: true, colorHex: true, textureImageUrl: true },
+    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+  },
   offers: {
     select: {
       market: true,
@@ -79,11 +85,6 @@ const productEditSelect = {
           availability: true,
           sourceUrl: true,
           imageUrl: true,
-          hasColorMaterial: true,
-          colorMaterialName: true,
-          materialType: true,
-          colorHex: true,
-          textureImageUrl: true,
           isDefault: true,
         },
         orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
@@ -158,6 +159,11 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
           <label className="admin-field">Descrição completa<textarea name="description" rows={6} defaultValue={editDescription} maxLength={30000} /></label>
           <ProductImageManager initialImages={offerImages} />
         </section>
+
+        <ProductColorMaterialFields
+          initialEnabled={product.hasColorMaterialOptions}
+          initialOptions={product.colorMaterialOptions}
+        />
 
         <OfferVariantFields currency={MARKET_CONFIG[selectedMarket].currency} initialVariants={initialVariants} />
 
