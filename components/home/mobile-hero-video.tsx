@@ -26,12 +26,13 @@ export function MobileHeroVideo() {
 
       if (document.hidden) {
         video.pause();
+        setIsPlaying(false);
         return;
       }
 
-      if (!video.ended) {
-        void video.play().catch(() => setIsPlaying(false));
-      }
+      void video.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
     };
 
     document.addEventListener("visibilitychange", syncPlayback);
@@ -53,6 +54,7 @@ export function MobileHeroVideo() {
       autoPlay
       muted
       playsInline
+      loop
       preload="metadata"
       poster="/images/noma/living-room.webp"
       aria-hidden="true"
@@ -61,7 +63,7 @@ export function MobileHeroVideo() {
       onError={() => setIsPlaying(false)}
     >
       <source
-        src="/videos/noma-hero-mobile.mp4"
+        src="/videos/nomavideooppo.mp4"
         type="video/mp4"
         media={MOBILE_HERO_SOURCE_MEDIA}
       />
