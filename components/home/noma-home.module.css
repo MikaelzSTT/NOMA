@@ -2219,10 +2219,9 @@
 
   .home > .header[data-surface="overlay"][data-scrolled="true"] {
     color: #fff;
-    background: rgba(25, 25, 22, 0.72);
+    background: rgba(25, 25, 22, 0.18);
     box-shadow: 0 8px 28px rgba(12, 12, 10, 0.12);
-    backdrop-filter: blur(14px) saturate(115%);
-    -webkit-backdrop-filter: blur(14px) saturate(115%);
+    backdrop-filter: blur(6px);
   }
 
   .home > .header[data-surface="overlay"][data-scrolled="true"] .headerInner {
