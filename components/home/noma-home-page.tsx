@@ -116,7 +116,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
               <p className={styles.kicker}>{isUS ? "Noma Store" : "Loja Noma"}</p>
               <h2>{isUS ? "Featured products" : "Produtos em destaque"}</h2>
               <p className={styles.productsSubhead}>
-                {isUS ? "Selected pieces from the US catalog with price, category, and availability in one place." : "Peças selecionadas do catálogo com preço, categoria e disponibilidade em um só lugar."}
+                {isUS ? "A considered edit of pieces chosen for their form, material, and comfort." : "Uma curadoria de peças escolhidas pela forma, matéria e conforto."}
               </p>
             </div>
             <Link href={searchPath(market)} className={styles.roundLink} aria-label={isUS ? "View all products" : "Ver todos os produtos"}>
@@ -125,7 +125,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
           </div>
 
           <div className={styles.storeProductGrid} data-home-product-count={products.length}>
-            {products.map((product, index) => <NomaProductCard key={product.id} product={product} market={market} index={index} />)}
+            {products.map((product, index) => <NomaProductCard key={product.id} product={product} market={market} index={index} variant="featured" />)}
           </div>
 
           {showCategoryRail && (

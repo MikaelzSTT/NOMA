@@ -7,11 +7,22 @@ import { MARKET_CONFIG, productPath, type Market } from "@/lib/market";
 import { formatMoney } from "@/lib/utils";
 import styles from "./noma-home.module.css";
 
-export function NomaProductCard({ product, market, index = 0 }: { product: CatalogProduct; market: Market; index?: number }) {
+export function NomaProductCard({
+  product,
+  market,
+  index = 0,
+  variant = "standard",
+}: {
+  product: CatalogProduct;
+  market: Market;
+  index?: number;
+  variant?: "standard" | "featured";
+}) {
   const image = product.images[0];
   const useSprite = image?.url === "/images/noma/products.webp";
   const config = MARKET_CONFIG[market];
   const isUS = market === "US";
+  const isFeatured = variant === "featured";
   const discountLabel = getDiscountLabel(product.sellingPrice, product.compareAtPrice, product.discountPercent);
   const badge = product.attributes.badge ? String(product.attributes.badge) : null;
   const savings = product.sellingPrice && product.compareAtPrice && product.compareAtPrice > product.sellingPrice
@@ -21,7 +32,7 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
 
   return (
     <article
-      className={styles.storeProductCard}
+      className={`${styles.storeProductCard}${isFeatured ? ` ${styles.featuredProductCard}` : ""}`}
       data-reveal
       style={{ transitionDelay: `${Math.min(index * 45, 180)}ms` }}
     >
@@ -47,12 +58,14 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
               src={image.url}
               alt={image.alt ?? product.title}
               fill
-              sizes="(max-width: 720px) 84vw, (max-width: 1180px) 31vw, 18vw"
-              quality={58}
+              sizes={isFeatured
+                ? "(max-width: 640px) 44vw, (max-width: 900px) 46vw, (max-width: 1180px) 23vw, 18vw"
+                : "(max-width: 720px) 84vw, (max-width: 1180px) 31vw, 18vw"}
+              quality={isFeatured ? 75 : 58}
               loading="lazy"
             />
           ) : null}
-          {(discountLabel || badge) && (
+          {!isFeatured && (discountLabel || badge) && (
             <div className={styles.storeImageBadges}>
               {discountLabel && <span className={styles.storeDiscount}>{discountLabel}</span>}
               {badge && <span className={styles.storeBadge}>{badge}</span>}
@@ -60,42 +73,57 @@ export function NomaProductCard({ product, market, index = 0 }: { product: Catal
           )}
         </div>
         <div className={styles.storeProductBody}>
-          <p className={styles.storeCategory}>{product.category.name}</p>
-          <h3>{product.title}</h3>
-          <div className={styles.storePriceRow}>
-            {product.sellingPrice ? (
-              <strong>{formatMoney(product.sellingPrice, product.currency, config.locale)}</strong>
-            ) : (
-              <strong>{isUS ? "Upon request" : "Sob consulta"}</strong>
-            )}
-            {product.compareAtPrice && product.sellingPrice && product.compareAtPrice > product.sellingPrice && (
-              <span>{formatMoney(product.compareAtPrice, product.currency, config.locale)}</span>
-            )}
-          </div>
-          {savings && (
-            <span className={styles.storeSavings}>
-              {isUS ? "Save" : "Economize"} {formatMoney(savings, product.currency, config.locale)}
-            </span>
-          )}
-          <ul className={styles.storeBenefits} aria-label={isUS ? "Purchase benefits" : "Benefícios da compra"}>
-            <li>
-              <Truck aria-hidden="true" />
-              <span>
-                {isUS ? "Shipping across the United States" : "Frete para todo o Brasil"}
-                {product.estimatedDelivery && <small className={styles.storeDelivery}>{product.estimatedDelivery}</small>}
+          {isFeatured ? (
+            <>
+              <h3>{product.title}</h3>
+              <div className={styles.storePriceRow}>
+                <strong>
+                  {product.sellingPrice
+                    ? formatMoney(product.sellingPrice, product.currency, config.locale)
+                    : isUS ? "Upon request" : "Sob consulta"}
+                </strong>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className={styles.storeCategory}>{product.category.name}</p>
+              <h3>{product.title}</h3>
+              <div className={styles.storePriceRow}>
+                {product.sellingPrice ? (
+                  <strong>{formatMoney(product.sellingPrice, product.currency, config.locale)}</strong>
+                ) : (
+                  <strong>{isUS ? "Upon request" : "Sob consulta"}</strong>
+                )}
+                {product.compareAtPrice && product.sellingPrice && product.compareAtPrice > product.sellingPrice && (
+                  <span>{formatMoney(product.compareAtPrice, product.currency, config.locale)}</span>
+                )}
+              </div>
+              {savings && (
+                <span className={styles.storeSavings}>
+                  {isUS ? "Save" : "Economize"} {formatMoney(savings, product.currency, config.locale)}
+                </span>
+              )}
+              <ul className={styles.storeBenefits} aria-label={isUS ? "Purchase benefits" : "Benefícios da compra"}>
+                <li>
+                  <Truck aria-hidden="true" />
+                  <span>
+                    {isUS ? "Shipping across the United States" : "Frete para todo o Brasil"}
+                    {product.estimatedDelivery && <small className={styles.storeDelivery}>{product.estimatedDelivery}</small>}
+                  </span>
+                </li>
+                <li>
+                  <ShieldCheck aria-hidden="true" />
+                  <span>{isUS ? "Secure checkout" : "Compra segura"}</span>
+                </li>
+              </ul>
+              <span className={styles.storeCardActions}>
+                <span className={styles.storeCardCta}>
+                  {isUS ? "View product" : "Ver produto"} <ArrowRight aria-hidden="true" />
+                </span>
+                <span className={styles.storeFavoriteSpace} aria-hidden="true" />
               </span>
-            </li>
-            <li>
-              <ShieldCheck aria-hidden="true" />
-              <span>{isUS ? "Secure checkout" : "Compra segura"}</span>
-            </li>
-          </ul>
-          <span className={styles.storeCardActions}>
-            <span className={styles.storeCardCta}>
-              {isUS ? "View product" : "Ver produto"} <ArrowRight aria-hidden="true" />
-            </span>
-            <span className={styles.storeFavoriteSpace} aria-hidden="true" />
-          </span>
+            </>
+          )}
         </div>
       </Link>
       <button
