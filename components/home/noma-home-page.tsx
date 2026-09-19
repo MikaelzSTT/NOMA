@@ -124,7 +124,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
             </Link>
           </div>
 
-          <div className={styles.storeProductGrid} data-home-product-count={products.length}>
+          <div className={`${styles.storeProductGrid} ${styles.featuredProductGrid}`} data-home-product-count={products.length}>
             {products.map((product, index) => <NomaProductCard key={product.id} product={product} market={market} index={index} variant="featured" />)}
           </div>
 
