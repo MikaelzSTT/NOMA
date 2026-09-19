@@ -939,6 +939,26 @@
   }
 }
 
+@media (min-width: 901px) {
+  .storeProductGrid.featuredProductGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: clamp(0.75rem, 1vw, 1.25rem);
+    row-gap: clamp(3rem, 4vw, 5rem);
+  }
+
+  .featuredProductCard .storeProductImage img {
+    object-fit: contain;
+    object-position: center;
+  }
+}
+
+@media (min-width: 1597px) {
+  .storeProductGrid.featuredProductGrid {
+    width: min(calc(100vw - 6rem), 112.5rem);
+    margin-inline: calc((100% - min(calc(100vw - 6rem), 112.5rem)) / 2);
+  }
+}
+
 .storeProductCard {
   position: relative;
   display: grid;

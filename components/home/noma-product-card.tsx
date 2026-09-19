@@ -59,7 +59,7 @@ export function NomaProductCard({
               alt={image.alt ?? product.title}
               fill
               sizes={isFeatured
-                ? "(max-width: 640px) 44vw, (max-width: 1180px) 45vw, (max-width: 1596px) 44vw, 710px"
+                ? "(max-width: 640px) 44vw, (max-width: 900px) 45vw, (max-width: 1896px) 23vw, 436px"
                 : "(max-width: 720px) 84vw, (max-width: 1180px) 31vw, 18vw"}
               quality={isFeatured ? 75 : 58}
               loading="lazy"
