@@ -48,6 +48,40 @@ describe("mercados públicos", () => {
     expect(products[0]).toMatchObject({ market: "BR", currency: "BRL", sellingPrice: 8940 });
   });
 
+  it("home retorna todos os produtos publicos do mercado sem limite ou duplicacao", async () => {
+    const offers = Array.from({ length: 20 }, (_, index) => {
+      const offer = offerRow("BR", `produto-${index + 1}`, "BRL", 1000 + index);
+      return {
+        ...offer,
+        id: `offer-BR-${index + 1}`,
+        productId: `product-${index + 1}`,
+        product: {
+          ...offer.product,
+          id: `product-${index + 1}`,
+          slug: `produto-${index + 1}`,
+        },
+      };
+    });
+    mocks.db.productMarketOffer.findMany.mockResolvedValueOnce(offers);
+
+    const { products } = await getHomeData({ market: "BR" });
+    const query = mocks.db.productMarketOffer.findMany.mock.calls.at(-1)?.[0];
+
+    expect(query).not.toHaveProperty("take");
+    expect(query).toMatchObject({
+      where: {
+        market: "BR",
+        active: true,
+        sellingPrice: { not: null },
+        availability: { not: "REMOVED" },
+        product: { active: true, archivedAt: null },
+      },
+      orderBy: [{ featured: "desc" }, { popularityScore: "desc" }, { createdAt: "desc" }],
+    });
+    expect(products).toHaveLength(20);
+    expect(new Set(products.map((product) => product.id)).size).toBe(20);
+  });
+
   it("US nunca consulta oferta BR e usa USD", async () => {
     const { products } = await getHomeData({ market: "US" });
     expect(mocks.db.productMarketOffer.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ market: "US" }) }));

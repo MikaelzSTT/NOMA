@@ -187,7 +187,6 @@ export async function getHomeData({ market }: { market: Market }) {
     where: { market, active: true, sellingPrice: { not: null }, availability: { not: "REMOVED" }, product: { active: true, archivedAt: null } },
     select: offerSelect,
     orderBy: [{ featured: "desc" }, { popularityScore: "desc" }, { createdAt: "desc" }],
-    take: 6,
   });
   return { products: products.map(toPublicProduct) };
 }
