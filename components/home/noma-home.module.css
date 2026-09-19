@@ -2018,6 +2018,17 @@
     width: calc(100% - 2rem);
   }
 
+  .staticHero {
+    position: sticky;
+    z-index: 0;
+    top: 0;
+  }
+
+  .staticHero ~ * {
+    position: relative;
+    z-index: 1;
+  }
+
   .wordmark {
     font-size: 1.45rem;
   }
@@ -2046,15 +2057,15 @@
   .header[data-surface="overlay"] .headerInner,
   .header[data-surface="overlay"][data-scrolled="true"] .headerInner {
     width: 100%;
-    height: calc(4.75rem + env(safe-area-inset-top, 0px));
+    height: calc(5.5rem + env(safe-area-inset-top, 0px));
     padding:
       env(safe-area-inset-top, 0px)
-      max(1rem, env(safe-area-inset-right, 0px))
+      max(1.125rem, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px))
       0
-      max(1rem, env(safe-area-inset-left, 0px));
+      max(1.125rem, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
     box-sizing: border-box;
-    grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
-    grid-template-rows: 4.75rem;
+    grid-template-columns: 3rem minmax(0, 1fr) 3rem;
+    grid-template-rows: 5.5rem;
   }
 
   .header[data-surface="overlay"] .wordmark {
@@ -2063,7 +2074,7 @@
     justify-self: center;
     padding-left: 0.42em;
     font-family: var(--font-display), var(--font-geist-sans), Arial, sans-serif;
-    font-size: 1.08rem;
+    font-size: 1.2rem;
     font-weight: 300;
     letter-spacing: 0.42em;
   }
@@ -2084,10 +2095,22 @@
   .header[data-surface="overlay"] .primaryHeaderAction,
   .header[data-surface="overlay"] .menuToggle {
     display: grid;
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 3rem;
+    height: 3rem;
     grid-row: 1;
     align-self: center;
+  }
+
+  .header[data-surface="overlay"] .menuIcon {
+    width: 1.6rem;
+    height: 1.6rem;
+    stroke-width: 1.5;
+  }
+
+  .header[data-surface="overlay"] .primaryHeaderAction svg {
+    width: 1.35rem;
+    height: 1.35rem;
+    stroke-width: 1.5;
   }
 
   .header[data-surface="overlay"] .menuToggle {
@@ -2106,7 +2129,7 @@
   }
 
   .header[data-surface="overlay"] .mobileMenu {
-    inset: calc(4.75rem + env(safe-area-inset-top, 0px)) 0 0;
+    inset: calc(5.5rem + env(safe-area-inset-top, 0px)) 0 0;
     padding:
       2.25rem
       max(1.25rem, env(safe-area-inset-right, 0px))
