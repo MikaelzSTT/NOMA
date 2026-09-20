@@ -6,7 +6,6 @@ import { HomeHeader } from "@/components/home/home-header";
 import { HomeMotion } from "@/components/home/home-motion";
 import { MobileHeroVideo } from "@/components/home/mobile-hero-video";
 import { NomaProductCard } from "@/components/home/noma-product-card";
-import { SofaProductRail } from "@/components/home/sofa-product-rail";
 import styles from "@/components/home/noma-home.module.css";
 import { getHomeData } from "@/lib/catalog";
 import { groupHomeProducts } from "@/lib/home-product-groups";
@@ -142,11 +141,11 @@ export async function NomaHomePage({ market }: { market: Market }) {
                 <div className={styles.homeProductBlockHeading}>
                   <h3 id="home-sofas-title">Sofás</h3>
                 </div>
-                <SofaProductRail itemCount={homeProductGroups.sofas.length}>
+                <div className={`${styles.storeProductGrid} ${styles.sofaProductGrid}`}>
                   {homeProductGroups.sofas.map((product, index) => (
                     <NomaProductCard key={product.id} product={product} market={market} index={index} variant="landscape" />
                   ))}
-                </SofaProductRail>
+                </div>
               </section>
 
               <section
