@@ -105,6 +105,13 @@ enum ShippingStrategy {
   DISABLED
 }
 
+enum AssistedPurchaseStatus {
+  NEW
+  CONTACTED
+  WON
+  LOST
+}
+
 /// A fonte comercial do produto. O nome fisico da tabela e mantido para que
 /// instalacoes da versao anterior possam migrar sem copiar dados.
 model Supplier {
@@ -217,17 +224,18 @@ model Product {
   categoryId              String
   brandId                 String?
 
-  supplier             Supplier                     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  category             Category                     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  brand                Brand?                       @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  images               ProductImage[]
-  variants             ProductVariant[]
-  offers               ProductMarketOffer[]
-  purchaseIntentEvents NomaPurchaseIntentEvent[]
-  orders               Order[]
-  priceHistory         PriceHistory[]
-  importItems          ImportItem[]
-  colorMaterialOptions ProductColorMaterialOption[]
+  supplier                 Supplier                     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  category                 Category                     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brand                    Brand?                       @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  images                   ProductImage[]
+  variants                 ProductVariant[]
+  offers                   ProductMarketOffer[]
+  purchaseIntentEvents     NomaPurchaseIntentEvent[]
+  assistedPurchaseRequests AssistedPurchaseRequest[]
+  orders                   Order[]
+  priceHistory             PriceHistory[]
+  importItems              ImportItem[]
+  colorMaterialOptions     ProductColorMaterialOption[]
 
   @@unique([supplierId, supplierProductId])
   @@index([active, archivedAt, availability])
@@ -288,12 +296,13 @@ model ProductMarketOffer {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
-  product              Product                     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplier             Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  variants             ProductMarketOfferVariant[]
-  purchaseIntentEvents NomaPurchaseIntentEvent[]
-  orders               Order[]
-  shippingQuotes       ShippingQuote[]
+  product                  Product                     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier                 Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  variants                 ProductMarketOfferVariant[]
+  purchaseIntentEvents     NomaPurchaseIntentEvent[]
+  assistedPurchaseRequests AssistedPurchaseRequest[]
+  orders                   Order[]
+  shippingQuotes           ShippingQuote[]
 
   @@unique([market, slug])
   @@unique([supplierId, market, supplierProductId])
@@ -327,10 +336,11 @@ model ProductMarketOfferVariant {
   updatedAt            DateTime           @updatedAt
   offerId              String
 
-  offer                ProductMarketOffer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  purchaseIntentEvents NomaPurchaseIntentEvent[]
-  orders               Order[]
-  shippingQuotes       ShippingQuote[]
+  offer                    ProductMarketOffer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  purchaseIntentEvents     NomaPurchaseIntentEvent[]
+  assistedPurchaseRequests AssistedPurchaseRequest[]
+  orders                   Order[]
+  shippingQuotes           ShippingQuote[]
 
   @@index([offerId, active])
   @@index([offerId, isDefault])
@@ -581,6 +591,37 @@ model Order {
   @@index([market, createdAt])
   @@index([status, createdAt])
   @@index([paymentStatus, createdAt])
+  @@index([productId, createdAt])
+  @@index([offerId, createdAt])
+}
+
+model AssistedPurchaseRequest {
+  id                   String                 @id @default(cuid())
+  productId            String
+  offerId              String
+  variantId            String?
+  market               Market
+  customerName         String                 @db.VarChar(255)
+  phone                String                 @db.VarChar(40)
+  email                String?                @db.VarChar(255)
+  consent              Boolean
+  productTitleSnapshot String                 @db.VarChar(255)
+  variantLabelSnapshot String?                @db.VarChar(255)
+  priceSnapshot        Decimal                @db.Decimal(12, 2)
+  currencySnapshot     String                 @db.VarChar(3)
+  pageUrl              String?                @db.VarChar(1000)
+  status               AssistedPurchaseStatus @default(NEW)
+  notes                String?                @db.Text
+  submissionKey        String                 @unique @db.VarChar(120)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  product Product                    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  offer   ProductMarketOffer         @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  variant ProductMarketOfferVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([market, createdAt])
   @@index([productId, createdAt])
   @@index([offerId, createdAt])
 }

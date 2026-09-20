@@ -8,6 +8,8 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
 import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
+import { AssistedPurchaseModal } from "@/components/assisted-purchase-modal";
+import { requiresAssistedPurchase as priceRequiresAssistedPurchase } from "@/lib/assisted-purchase-policy";
 import type { CatalogProductColorMaterialOption, CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
 import type { ProductCategorySlug } from "@/lib/product-categories";
@@ -75,10 +77,11 @@ export function ProductDetailPurchase({
   const [shippingMessage, setShippingMessage] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [assistedMessage, setAssistedMessage] = useState<string | null>(null);
+  const [isAssistedModalOpen, setIsAssistedModalOpen] = useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
   const selectedVariantId = selectedVariant?.id ?? null;
   const selectedPrice = selectedVariant?.salePrice ?? fallback.sellingPrice ?? 0;
-  const requiresAssistedPurchase = market === "BR" && selectedPrice >= 10_000;
+  const requiresAssistedPurchase = priceRequiresAssistedPurchase(market, selectedPrice);
   const selectedShippingQuote = shippingQuotes.find((quote) => quote.quoteId === selectedQuoteId) ?? null;
   const requiresShippingQuote = market === "BR" && !requiresAssistedPurchase;
   const selectedVariantPurchasable = selectedVariant ? variantIsSelectable(selectedVariant) : productFallbackIsPurchasable(fallback);
@@ -184,7 +187,11 @@ export function ProductDetailPurchase({
         )}
         {market === "US" ? (
           <button disabled className={styles.buyButton}>Available soon</button>
-        ) : requiresAssistedPurchase || assistedMessage ? (
+        ) : requiresAssistedPurchase ? (
+          <button className={styles.buyButton} type="button" onClick={handleOpenAssistedPurchase}>
+            Solicitar atendimento de compra
+          </button>
+        ) : assistedMessage ? (
           <button className={styles.buyButton} type="button" onClick={handleAssistedPurchase}>
             Solicitar atendimento de compra
           </button>
@@ -206,6 +213,21 @@ export function ProductDetailPurchase({
           <p className={styles.purchaseMessage}>{checkoutError ?? assistedMessage}</p>
         )}
       </div>
+      {requiresAssistedPurchase && (
+        <AssistedPurchaseModal
+          key={selectedVariantId ?? "offer"}
+          isOpen={isAssistedModalOpen}
+          onClose={() => setIsAssistedModalOpen(false)}
+          productId={productId}
+          offerId={offerId}
+          variantId={selectedVariantId}
+          productName={name}
+          variantLabel={selectedVariant?.label ?? null}
+          displayedPrice={selectedPrice}
+          currency={fallback.currency}
+          market={market}
+        />
+      )}
     </section>
   );
 
@@ -281,6 +303,17 @@ export function ProductDetailPurchase({
       variantId: selectedVariantId,
     });
     router.push("/br#contato");
+  }
+
+  function handleOpenAssistedPurchase() {
+    trackNomaPurchaseIntent({
+      eventType: "assisted_purchase_click",
+      market,
+      productId,
+      productSlug,
+      variantId: selectedVariantId,
+    });
+    setIsAssistedModalOpen(true);
   }
 
   function handleSelectVariant(variant: CatalogProductVariant) {

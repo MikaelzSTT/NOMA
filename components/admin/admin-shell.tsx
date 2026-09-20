@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, ChartNoAxesColumn, FileClock, FileUp, Gauge, LogOut, ReceiptText, Store, Truck } from "lucide-react";
+import { Boxes, ChartNoAxesColumn, FileClock, FileUp, Gauge, Headphones, LogOut, ReceiptText, Store, Truck } from "lucide-react";
 import { logoutAction } from "@/app/admin/actions";
 import { Logo } from "@/components/logo";
 
@@ -7,6 +7,7 @@ const links = [
   { href: "/admin", label: "Visao geral", icon: Gauge },
   { href: "/admin/produtos", label: "Produtos", icon: Boxes },
   { href: "/admin/pedidos", label: "Pedidos", icon: ReceiptText },
+  { href: "/admin/atendimentos", label: "Atendimentos", icon: Headphones },
   { href: "/admin/fornecedores", label: "Fornecedores", icon: Truck },
   { href: "/admin/importar", label: "Importar", icon: FileUp },
   { href: "/admin/trafego", label: "Trafego", icon: ChartNoAxesColumn },

@@ -579,6 +579,248 @@
   line-height: 1.5;
 }
 
+.assistedModalBackdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  overflow: hidden;
+  background: rgba(25, 25, 22, 0.58);
+  padding: 1rem;
+  backdrop-filter: blur(7px);
+}
+
+.assistedModal {
+  position: relative;
+  width: min(100%, 38rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: var(--noma-card);
+  box-shadow: 0 2rem 6rem rgba(20, 20, 18, 0.28);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  color: var(--noma-ink);
+  color-scheme: light;
+}
+
+.assistedModalClose {
+  position: absolute;
+  z-index: 1;
+  top: 0.9rem;
+  right: 0.9rem;
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  place-items: center;
+  border: 1px solid var(--noma-line);
+  border-radius: 50%;
+  background: rgba(255, 253, 250, 0.9);
+  color: var(--noma-ink);
+}
+
+.assistedModalClose:hover {
+  background: var(--noma-paper);
+}
+
+.assistedModalClose:focus-visible,
+.assistedForm input:focus-visible,
+.assistedSubmitButton:focus-visible {
+  outline: 2px solid var(--noma-ink);
+  outline-offset: 3px;
+}
+
+.assistedModalHeading {
+  padding-right: 2.5rem;
+}
+
+.assistedModalKicker {
+  color: var(--noma-wood);
+  font-size: 0.63rem;
+  font-weight: 740;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.assistedModalHeading h2,
+.assistedModalSuccess h2 {
+  max-width: 12ch;
+  margin-top: 0.65rem;
+  font-family: var(--font-display), var(--font-geist-sans), Arial, sans-serif;
+  font-size: clamp(2rem, 7vw, 3.2rem);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.assistedModalHeading > p:last-child,
+.assistedModalSuccess > p:not(.assistedModalKicker) {
+  max-width: 32rem;
+  margin-top: 1rem;
+  color: var(--noma-muted);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.assistedProductSummary {
+  display: flex;
+  margin-top: 1.6rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  border-block: 1px solid var(--noma-line);
+  padding-block: 1rem;
+}
+
+.assistedProductSummary strong,
+.assistedProductSummary span {
+  display: block;
+}
+
+.assistedProductSummary strong {
+  font-size: 0.84rem;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.assistedProductSummary span {
+  margin-top: 0.25rem;
+  color: var(--noma-muted);
+  font-size: 0.72rem;
+}
+
+.assistedProductSummary b {
+  flex: 0 0 auto;
+  font-family: var(--font-display), var(--font-geist-sans), Arial, sans-serif;
+  font-size: 1.2rem;
+  font-weight: 620;
+  letter-spacing: -0.025em;
+}
+
+.assistedForm {
+  display: grid;
+  margin-top: 1.5rem;
+  gap: 1rem;
+}
+
+.assistedField {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.assistedField label {
+  color: var(--noma-ink);
+  font-size: 0.67rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.assistedField label span {
+  color: var(--noma-muted);
+  font-weight: 560;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.assistedField input {
+  width: 100%;
+  height: 3rem;
+  border: 1px solid var(--noma-line);
+  border-radius: 0;
+  background: var(--noma-paper-light);
+  padding-inline: 0.85rem;
+  color: var(--noma-ink);
+  font-size: 0.9rem;
+}
+
+.assistedField input[aria-invalid="true"] {
+  border-color: #9f3a2f;
+}
+
+.assistedConsentField {
+  display: grid;
+  margin-top: 0.2rem;
+  gap: 0.4rem;
+}
+
+.assistedConsentField label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+  color: var(--noma-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.assistedConsentField input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: 0.08rem;
+  accent-color: var(--noma-ink);
+}
+
+.assistedFieldError,
+.assistedRequestError {
+  color: #8e3027;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.assistedRequestError {
+  border-left: 2px solid currentColor;
+  background: rgba(142, 48, 39, 0.06);
+  padding: 0.7rem 0.8rem;
+}
+
+.assistedSubmitButton {
+  display: flex;
+  width: 100%;
+  min-height: 3.65rem;
+  margin-top: 0.35rem;
+  align-items: center;
+  justify-content: center;
+  background: var(--noma-ink);
+  padding: 0.9rem 1.2rem;
+  color: var(--noma-paper-light);
+  font-size: 0.68rem;
+  font-weight: 740;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.assistedSubmitButton:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.assistedModalSuccess {
+  display: grid;
+  min-height: 26rem;
+  align-content: center;
+  justify-items: start;
+  padding-top: 1rem;
+}
+
+.assistedSuccessIcon {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-bottom: 1.4rem;
+  place-items: center;
+  border: 1px solid rgba(83, 98, 71, 0.35);
+  border-radius: 50%;
+  background: rgba(109, 116, 95, 0.1);
+  color: #536247;
+}
+
+.assistedModalSuccess .assistedSubmitButton {
+  margin-top: 2rem;
+}
+
 .contentBand {
   display: grid;
   padding-block: clamp(4.5rem, 7vw, 7rem);
@@ -701,6 +943,15 @@
   .contentBand { padding-block: 4.5rem; }
   .relatedGrid { grid-template-columns: 1fr; }
   .relatedHeading { align-items: start; flex-direction: column; }
+  .assistedModalBackdrop { align-items: end; padding: 0.55rem; }
+  .assistedModal { width: 100%; max-height: calc(100dvh - 1.1rem); padding: 1.5rem 1.15rem 1.2rem; }
+  .assistedModalHeading { padding-right: 2.75rem; }
+  .assistedModalHeading h2,
+  .assistedModalSuccess h2 { font-size: clamp(2rem, 10vw, 2.65rem); }
+  .assistedProductSummary { align-items: flex-start; flex-direction: column; gap: 0.65rem; }
+  .assistedProductSummary b { font-size: 1.35rem; }
+  .assistedField input { height: 3.15rem; font-size: 1rem; }
+  .assistedSubmitButton { min-height: 3.8rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

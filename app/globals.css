@@ -157,6 +157,13 @@ button:disabled { cursor: not-allowed; }
 .admin-table th { border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.75rem 1rem; text-align: left; font-size: 0.68rem; font-weight: 850; text-transform: uppercase; white-space: nowrap; }
 .admin-table td { border-bottom: 1px solid var(--border); padding: 0.75rem 1rem; }
 .admin-table tr:last-child td { border-bottom: 0; }
+.admin-request-details { position: relative; min-width: 5rem; }
+.admin-request-details summary { cursor: pointer; color: var(--brand); font-weight: 750; white-space: nowrap; }
+.admin-request-details[open] { min-width: 20rem; }
+.admin-request-details dl { display: grid; margin-top: 0.75rem; gap: 0.45rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.admin-request-details dl div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 0.65rem; }
+.admin-request-details dt { font-size: 0.68rem; font-weight: 800; color: var(--ink); }
+.admin-request-details dd { overflow-wrap: anywhere; }
 .status-pill { border-radius: 999px; padding: 0.28rem 0.55rem; font-size: 0.68rem; font-weight: 800; }
 .status-pill.active { background: var(--mint); color: var(--brand-strong); }
 .status-pill.inactive { background: #ecefed; color: var(--muted); }
