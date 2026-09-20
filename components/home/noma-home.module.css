@@ -1385,6 +1385,15 @@
   row-gap: clamp(2.5rem, 4vw, 4.5rem);
 }
 
+.sofaProductRail,
+.sofaProductViewport {
+  display: contents;
+}
+
+.sofaProductControls {
+  display: none;
+}
+
 .storeProductGrid.mattressProductGrid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: clamp(1.5rem, 3vw, 3.5rem);
@@ -1403,6 +1412,88 @@
 .squareProductCard .storeProductImage img {
   object-fit: contain;
   object-position: center;
+}
+
+@media (min-width: 901px) {
+  .sofaProductRail {
+    position: relative;
+    display: block;
+    min-width: 0;
+  }
+
+  .sofaProductViewport {
+    display: block;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-behavior: smooth;
+    scroll-snap-type: inline mandatory;
+    scrollbar-width: none;
+  }
+
+  .sofaProductViewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .storeProductGrid.sofaProductGrid {
+    width: 100%;
+    grid-template-columns: none;
+    grid-auto-columns: calc((100% - 3 * clamp(0.85rem, 1.25vw, 1.25rem)) / 4);
+    grid-auto-flow: column;
+    row-gap: 0;
+  }
+
+  .sofaProductGrid > * {
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+
+  .sofaProductControls {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    bottom: calc(100% + 0.65rem);
+    display: flex;
+    gap: 0.35rem;
+  }
+
+  .sofaProductControls button {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid rgba(32, 33, 29, 0.4);
+    border-radius: 50%;
+    place-items: center;
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      border-color 180ms ease,
+      color 180ms ease,
+      opacity 180ms ease;
+  }
+
+  .sofaProductControls button:hover:not(:disabled) {
+    border-color: var(--ink);
+  }
+
+  .sofaProductControls button:disabled {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sofaProductControls svg {
+    width: 1rem;
+    height: 1rem;
+    stroke-width: 1.6;
+  }
+
+  .storeProductGrid.sofaProductGrid .storeProductCard.featuredProductCard,
+  .storeProductGrid.mattressProductGrid .storeProductCard.featuredProductCard {
+    padding: 0.55rem;
+    border: 1.25px solid rgba(20, 20, 18, 0.82);
+  }
 }
 
 @media (max-width: 900px) {
