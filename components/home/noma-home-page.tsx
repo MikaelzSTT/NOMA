@@ -8,6 +8,7 @@ import { MobileHeroVideo } from "@/components/home/mobile-hero-video";
 import { NomaProductCard } from "@/components/home/noma-product-card";
 import styles from "@/components/home/noma-home.module.css";
 import { getHomeData } from "@/lib/catalog";
+import { groupHomeProducts } from "@/lib/home-product-groups";
 import { categoryPath, searchPath, type Market } from "@/lib/market";
 
 const rooms = [
@@ -63,6 +64,7 @@ const materials = [
 export async function NomaHomePage({ market }: { market: Market }) {
   const isUS = market === "US";
   const { products } = await getHomeData({ market });
+  const homeProductGroups = groupHomeProducts(products);
   const categories = Array.from(
     new Map(products.map((product) => [product.category.slug, product.category])).values(),
   );
@@ -124,9 +126,46 @@ export async function NomaHomePage({ market }: { market: Market }) {
             </Link>
           </div>
 
-          <div className={`${styles.storeProductGrid} ${styles.featuredProductGrid}`} data-home-product-count={products.length}>
-            {products.map((product, index) => <NomaProductCard key={product.id} product={product} market={market} index={index} variant="featured" />)}
-          </div>
+          {isUS ? (
+            <div className={`${styles.storeProductGrid} ${styles.featuredProductGrid}`} data-home-product-count={products.length}>
+              {products.map((product, index) => <NomaProductCard key={product.id} product={product} market={market} index={index} variant="featured" />)}
+            </div>
+          ) : (
+            <div className={styles.homeProductGroups}>
+              <section
+                className={styles.homeProductBlock}
+                aria-labelledby="home-sofas-title"
+                data-home-product-group="sofas"
+                data-home-product-count={homeProductGroups.sofas.length}
+              >
+                <div className={styles.homeProductBlockHeading}>
+                  <h3 id="home-sofas-title">Sofás</h3>
+                </div>
+                <div className={`${styles.storeProductGrid} ${styles.sofaProductGrid}`}>
+                  {homeProductGroups.sofas.map((product, index) => (
+                    <NomaProductCard key={product.id} product={product} market={market} index={index} variant="landscape" />
+                  ))}
+                </div>
+              </section>
+
+              <section
+                className={styles.homeProductBlock}
+                aria-labelledby="home-mattresses-title"
+                data-home-product-group="mattresses"
+                data-home-category-slug="colchoes"
+                data-home-product-count={homeProductGroups.mattresses.length}
+              >
+                <div className={styles.homeProductBlockHeading}>
+                  <h3 id="home-mattresses-title">Colchões</h3>
+                </div>
+                <div className={`${styles.storeProductGrid} ${styles.mattressProductGrid}`}>
+                  {homeProductGroups.mattresses.map((product, index) => (
+                    <NomaProductCard key={product.id} product={product} market={market} index={index} variant="square" />
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
 
           {showCategoryRail && (
             <nav className={styles.categoryRail} aria-label="Atalhos do catálogo" data-reveal>

@@ -16,13 +16,18 @@ export function NomaProductCard({
   product: CatalogProduct;
   market: Market;
   index?: number;
-  variant?: "standard" | "featured";
+  variant?: "standard" | "featured" | "landscape" | "square";
 }) {
   const image = product.images[0];
   const useSprite = image?.url === "/images/noma/products.webp";
   const config = MARKET_CONFIG[market];
   const isUS = market === "US";
-  const isFeatured = variant === "featured";
+  const isEditorial = variant !== "standard";
+  const layoutClass = variant === "landscape"
+    ? styles.landscapeProductCard
+    : variant === "square"
+      ? styles.squareProductCard
+      : "";
   const discountLabel = getDiscountLabel(product.sellingPrice, product.compareAtPrice, product.discountPercent);
   const badge = product.attributes.badge ? String(product.attributes.badge) : null;
   const savings = product.sellingPrice && product.compareAtPrice && product.compareAtPrice > product.sellingPrice
@@ -32,7 +37,8 @@ export function NomaProductCard({
 
   return (
     <article
-      className={`${styles.storeProductCard}${isFeatured ? ` ${styles.featuredProductCard}` : ""}`}
+      className={`${styles.storeProductCard}${isEditorial ? ` ${styles.featuredProductCard}` : ""}${layoutClass ? ` ${layoutClass}` : ""}`}
+      data-product-card-layout={variant === "landscape" || variant === "square" ? variant : undefined}
       data-reveal
       style={{ transitionDelay: `${Math.min(index * 45, 180)}ms` }}
     >
@@ -58,14 +64,16 @@ export function NomaProductCard({
               src={image.url}
               alt={image.alt ?? product.title}
               fill
-              sizes={isFeatured
-                ? "(max-width: 640px) 44vw, (max-width: 900px) 45vw, (max-width: 1896px) 23vw, 436px"
-                : "(max-width: 720px) 84vw, (max-width: 1180px) 31vw, 18vw"}
-              quality={isFeatured ? 75 : 58}
+              sizes={variant === "square"
+                ? "(max-width: 640px) 44vw, (max-width: 900px) 45vw, (max-width: 1596px) 31vw, 484px"
+                : isEditorial
+                  ? "(max-width: 640px) 44vw, (max-width: 900px) 45vw, (max-width: 1596px) 23vw, 360px"
+                  : "(max-width: 720px) 84vw, (max-width: 1180px) 31vw, 18vw"}
+              quality={isEditorial ? 75 : 58}
               loading="lazy"
             />
           ) : null}
-          {!isFeatured && (discountLabel || badge) && (
+          {!isEditorial && (discountLabel || badge) && (
             <div className={styles.storeImageBadges}>
               {discountLabel && <span className={styles.storeDiscount}>{discountLabel}</span>}
               {badge && <span className={styles.storeBadge}>{badge}</span>}
@@ -73,7 +81,7 @@ export function NomaProductCard({
           )}
         </div>
         <div className={styles.storeProductBody}>
-          {isFeatured ? (
+          {isEditorial ? (
             <>
               <h3>{product.title}</h3>
               <div className={styles.storePriceRow}>
