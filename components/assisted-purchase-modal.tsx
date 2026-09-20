@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { Check, X } from "lucide-react";
+import { sendGoogleAdsLeadConversion } from "@/components/analytics/google-tracking";
 import type { Market } from "@/lib/market";
 import { MARKET_CONFIG } from "@/lib/market";
 import styles from "./product-detail.module.css";
@@ -299,6 +300,7 @@ export function AssistedPurchaseModal({
       });
       const payload = await response.json().catch(() => null) as AssistedPurchaseResponse | null;
       if (response.ok && payload?.type === "success") {
+        sendGoogleAdsLeadConversion(payload.conversionId);
         setIsSuccess(true);
         return;
       }
@@ -312,7 +314,7 @@ export function AssistedPurchaseModal({
 }
 
 type AssistedPurchaseResponse =
-  | { type: "success" }
+  | { type: "success"; conversionId: string }
   | { type: "error"; error: string; message: string };
 
 function validateForm(values: FormValues): FieldErrors {

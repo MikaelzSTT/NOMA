@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
+import { GOOGLE_ADS_ID } from "./lib/tracking";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const hasGoogleTracking = Boolean(
   process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()
-  || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim(),
+  || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim()
+  || GOOGLE_ADS_ID,
 );
 const scriptSources = [
   "'self'",

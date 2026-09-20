@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Clock3, RotateCcw, XCircle } from "lucide-react";
+import { GoogleAdsPurchaseConversion } from "@/components/analytics/google-tracking";
 import { getPublicOrder } from "@/lib/orders";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -11,40 +12,59 @@ export async function PedidoStatus({ orderNumber, state }: { orderNumber: string
   if (!order || order.market !== "BR") notFound();
   const content = contentFor(order.paymentStatus, state);
   const Icon = content.icon;
+  const approvedConversion = order.paymentStatus === "APPROVED"
+    && order.mercadoPagoPaymentId
+    && order.paidAt
+    && order.currency === "BRL"
+    ? {
+        transactionId: order.publicOrderNumber,
+        value: Number(order.total),
+        currency: "BRL" as const,
+      }
+    : undefined;
+  const shouldPollPayment = ["PENDING", "IN_PROCESS"].includes(order.paymentStatus);
 
   return (
-    <main className="container py-12">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-8">
-          <p className="eyebrow">Pedido {order.publicOrderNumber}</p>
-          <h1 className="mt-2 text-3xl font-black text-ink">{content.title}</h1>
-          <p className="mt-3 text-muted">{content.description}</p>
-        </div>
-
-        <section className="admin-panel">
-          <div className="flex items-start gap-4">
-            <span className="grid size-11 place-items-center rounded-sm bg-mint text-brand-strong"><Icon size={22} /></span>
-            <div className="min-w-0">
-              <h2>{order.productNameSnapshot}</h2>
-              <p className="mt-1 text-sm text-muted">{order.variantNameSnapshot ?? "Variante padrao"} · {order.quantity} unidade(s)</p>
-            </div>
+    <>
+      <GoogleAdsPurchaseConversion
+        initialConversion={approvedConversion}
+        statusEndpoint={shouldPollPayment
+          ? `/api/orders/${encodeURIComponent(order.publicOrderNumber)}/google-ads-conversion`
+          : undefined}
+      />
+      <main className="container py-12">
+        <div className="mx-auto max-w-2xl">
+          <div className="mb-8">
+            <p className="eyebrow">Pedido {order.publicOrderNumber}</p>
+            <h1 className="mt-2 text-3xl font-black text-ink">{content.title}</h1>
+            <p className="mt-3 text-muted">{content.description}</p>
           </div>
-          <dl className="mt-6 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
-            <Metric label="Status do pedido" value={order.status} />
-            <Metric label="Status do pagamento" value={order.paymentStatus} />
-            <Metric label="Subtotal" value={formatMoney(order.subtotal, order.currency)} />
-            <Metric label="Frete" value={formatMoney(order.shippingAmount, order.currency)} />
-            <Metric label="Total" value={formatMoney(order.total, order.currency)} />
-            <Metric label="Criado em" value={formatDate(order.createdAt)} />
-          </dl>
-        </section>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {state === "failure" && <Link href="/br" className="button-primary"><RotateCcw size={17} /> Voltar a loja</Link>}
-          <Link href="/br" className="button-secondary">Continuar navegando</Link>
+          <section className="admin-panel">
+            <div className="flex items-start gap-4">
+              <span className="grid size-11 place-items-center rounded-sm bg-mint text-brand-strong"><Icon size={22} /></span>
+              <div className="min-w-0">
+                <h2>{order.productNameSnapshot}</h2>
+                <p className="mt-1 text-sm text-muted">{order.variantNameSnapshot ?? "Variante padrao"} · {order.quantity} unidade(s)</p>
+              </div>
+            </div>
+            <dl className="mt-6 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
+              <Metric label="Status do pedido" value={order.status} />
+              <Metric label="Status do pagamento" value={order.paymentStatus} />
+              <Metric label="Subtotal" value={formatMoney(order.subtotal, order.currency)} />
+              <Metric label="Frete" value={formatMoney(order.shippingAmount, order.currency)} />
+              <Metric label="Total" value={formatMoney(order.total, order.currency)} />
+              <Metric label="Criado em" value={formatDate(order.createdAt)} />
+            </dl>
+          </section>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            {state === "failure" && <Link href="/br" className="button-primary"><RotateCcw size={17} /> Voltar a loja</Link>}
+            <Link href="/br" className="button-secondary">Continuar navegando</Link>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
 

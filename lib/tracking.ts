@@ -1,5 +1,9 @@
 import type { Market } from "@/lib/market";
 
+export const GOOGLE_ADS_ID = "AW-415422628";
+export const GOOGLE_ADS_PURCHASE_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/yavHCK-WzP4cEKSxi8YB`;
+export const GOOGLE_ADS_LEAD_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/_2feCLKWzP4cEKSxi8YB`;
+
 export type GoogleTrackingConfig = {
   gaMeasurementId?: string;
   googleAdsId?: string;
@@ -19,6 +23,18 @@ export type TrafficParams = {
   gclid?: string;
 };
 
+export type GoogleAdsPurchaseConversionParams = {
+  send_to: typeof GOOGLE_ADS_PURCHASE_CONVERSION_TARGET;
+  value: number;
+  currency: "BRL";
+  transaction_id: string;
+};
+
+export type GoogleAdsLeadConversionParams = {
+  send_to: typeof GOOGLE_ADS_LEAD_CONVERSION_TARGET;
+  transaction_id: string;
+};
+
 const TRACKED_QUERY_PARAMS = [
   "utm_source",
   "utm_medium",
@@ -31,8 +47,30 @@ const TRACKED_QUERY_PARAMS = [
 export function getGoogleTrackingConfig(): GoogleTrackingConfig {
   return {
     gaMeasurementId: cleanEnvValue(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID),
-    googleAdsId: cleanEnvValue(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID),
+    googleAdsId: cleanEnvValue(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID) ?? GOOGLE_ADS_ID,
     googleAdsConversionLabel: cleanEnvValue(process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL),
+  };
+}
+
+export function buildGoogleAdsPurchaseConversionParams({
+  value,
+  transactionId,
+}: {
+  value: number;
+  transactionId: string;
+}): GoogleAdsPurchaseConversionParams {
+  return {
+    send_to: GOOGLE_ADS_PURCHASE_CONVERSION_TARGET,
+    value,
+    currency: "BRL",
+    transaction_id: transactionId,
+  };
+}
+
+export function buildGoogleAdsLeadConversionParams(transactionId: string): GoogleAdsLeadConversionParams {
+  return {
+    send_to: GOOGLE_ADS_LEAD_CONVERSION_TARGET,
+    transaction_id: transactionId,
   };
 }
 

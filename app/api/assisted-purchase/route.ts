@@ -46,11 +46,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await createAssistedPurchaseRequest(
+    const result = await createAssistedPurchaseRequest(
       parsed.data,
       request.headers.get("idempotency-key") ?? randomUUID(),
     );
-    return NextResponse.json({ type: "success" }, { status: 201 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof AssistedPurchaseError) {
       return NextResponse.json(

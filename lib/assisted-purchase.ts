@@ -120,8 +120,9 @@ export async function createAssistedPurchaseRequest(
     );
   }
 
+  let request: { id: string } | null = null;
   try {
-    await db.assistedPurchaseRequest.create({
+    request = await db.assistedPurchaseRequest.create({
       data: {
         productId: offer.productId,
         offerId: offer.id,
@@ -139,12 +140,18 @@ export async function createAssistedPurchaseRequest(
         status: "NEW",
         submissionKey: parsedSubmissionKey.data,
       },
+      select: { id: true },
     });
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
+    request = await db.assistedPurchaseRequest.findUnique({
+      where: { submissionKey: parsedSubmissionKey.data },
+      select: { id: true },
+    });
+    if (!request) throw error;
   }
 
-  return { type: "success" as const };
+  return { type: "success" as const, conversionId: request.id };
 }
 
 function isAvailable(value: string) {

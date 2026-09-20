@@ -19,6 +19,27 @@ import { POST } from "@/app/api/assisted-purchase/route";
 describe("POST /api/assisted-purchase", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 });
+    mocks.safeParse.mockReturnValue({ success: true, data: { productId: "product-1" } });
+    mocks.createAssistedPurchaseRequest.mockResolvedValue({ type: "success", conversionId: "request-1" });
+  });
+
+  it("retorna o ID de conversao somente depois da persistencia bem-sucedida", async () => {
+    const request = new NextRequest(new Request("https://noma.test/api/assisted-purchase", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "submission-key-http-0001",
+        "x-forwarded-for": "203.0.113.10",
+      },
+      body: JSON.stringify({ productId: "product-1" }),
+    }));
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({ type: "success", conversionId: "request-1" });
+    expect(mocks.createAssistedPurchaseRequest).toHaveBeenCalledOnce();
   });
 
   it("aplica rate limit antes de processar dados pessoais", async () => {

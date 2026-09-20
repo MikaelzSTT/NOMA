@@ -1,12 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGoogleAdsLeadConversionParams,
+  buildGoogleAdsPurchaseConversionParams,
   buildTrafficParams,
+  GOOGLE_ADS_ID,
+  getGoogleTrackingConfig,
   googleAdsConversionTarget,
   hasGoogleAdsConversionConfig,
   hasGoogleTrackingConfig,
 } from "@/lib/tracking";
 
 describe("tracking Google", () => {
+  it("configura a Google tag da conta de Ads usada pelas conversoes", () => {
+    const configuredId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+    delete process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+    try {
+      expect(GOOGLE_ADS_ID).toBe("AW-415422628");
+      expect(getGoogleTrackingConfig().googleAdsId).toBe(GOOGLE_ADS_ID);
+    } finally {
+      if (configuredId === undefined) {
+        delete process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+      } else {
+        process.env.NEXT_PUBLIC_GOOGLE_ADS_ID = configuredId;
+      }
+    }
+  });
+
   it("so inicializa quando GA4 ou Google Ads estao configurados", () => {
     expect(hasGoogleTrackingConfig({})).toBe(false);
     expect(hasGoogleTrackingConfig({ googleAdsConversionLabel: "label" })).toBe(false);
@@ -38,6 +57,25 @@ describe("tracking Google", () => {
       utm_content: "criativo-a",
       utm_term: "sofa",
       gclid: "abc123",
+    });
+  });
+
+  it("monta a conversao de compra com valor real, BRL e pedido unico", () => {
+    expect(buildGoogleAdsPurchaseConversionParams({
+      value: 1_354.56,
+      transactionId: "BRORDER0001",
+    })).toEqual({
+      send_to: "AW-415422628/yavHCK-WzP4cEKSxi8YB",
+      value: 1_354.56,
+      currency: "BRL",
+      transaction_id: "BRORDER0001",
+    });
+  });
+
+  it("monta a conversao de lead sem dados pessoais", () => {
+    expect(buildGoogleAdsLeadConversionParams("request-1")).toEqual({
+      send_to: "AW-415422628/_2feCLKWzP4cEKSxi8YB",
+      transaction_id: "request-1",
     });
   });
 });

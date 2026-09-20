@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   db: {
     productMarketOffer: { findFirst: vi.fn() },
-    assistedPurchaseRequest: { create: vi.fn() },
+    assistedPurchaseRequest: { create: vi.fn(), findUnique: vi.fn() },
   },
 }));
 
@@ -36,6 +36,7 @@ describe("registro de compra assistida", () => {
     vi.clearAllMocks();
     mocks.db.productMarketOffer.findFirst.mockResolvedValue(offerFixture());
     mocks.db.assistedPurchaseRequest.create.mockResolvedValue({ id: "request-1" });
+    mocks.db.assistedPurchaseRequest.findUnique.mockResolvedValue({ id: "request-1" });
   });
 
   it("rejeita oferta abaixo do limite", async () => {
@@ -97,6 +98,7 @@ describe("registro de compra assistida", () => {
         consent: true,
         status: "NEW",
       }),
+      select: { id: true },
     });
   });
 
@@ -116,6 +118,7 @@ describe("registro de compra assistida", () => {
         variantLabelSnapshot: "300 cm",
         priceSnapshot: 15_900,
       }),
+      select: { id: true },
     });
   });
 
@@ -138,7 +141,11 @@ describe("registro de compra assistida", () => {
     mocks.db.assistedPurchaseRequest.create.mockRejectedValue({ code: "P2002" });
 
     await expect(createAssistedPurchaseRequest(validInput(), "submission-key-0005"))
-      .resolves.toEqual({ type: "success" });
+      .resolves.toEqual({ type: "success", conversionId: "request-1" });
+    expect(mocks.db.assistedPurchaseRequest.findUnique).toHaveBeenCalledWith({
+      where: { submissionKey: "submission-key-0005" },
+      select: { id: true },
+    });
   });
 });
 
