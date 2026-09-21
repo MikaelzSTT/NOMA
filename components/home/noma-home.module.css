@@ -382,6 +382,25 @@
   display: none;
 }
 
+.desktopHeroVideo {
+  display: none;
+}
+
+@media (min-width: 641px) and (prefers-reduced-motion: no-preference) {
+  .desktopHeroVideo {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #6e6a61;
+    object-fit: cover;
+    object-position: center;
+    pointer-events: none;
+  }
+}
+
 .sceneCanvas {
   z-index: 1;
   overflow: hidden;

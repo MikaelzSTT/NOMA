@@ -85,6 +85,23 @@ export async function NomaHomePage({ market }: { market: Market }) {
               sizes="100vw"
             />
           </div>
+          <video
+            className={styles.desktopHeroVideo}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            poster="/images/noma/living-room.webp"
+            aria-hidden="true"
+            tabIndex={-1}
+          >
+            <source
+              src="/videos/noma-hero-desktop.mp4"
+              type="video/mp4"
+              media="(min-width: 641px) and (prefers-reduced-motion: no-preference)"
+            />
+          </video>
           <MobileHeroVideo />
           <div className={styles.houseShade} />
           <div className={styles.filmGrain} />
