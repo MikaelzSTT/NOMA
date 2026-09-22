@@ -38,6 +38,7 @@ describe("conversoes Google Ads", () => {
     expect(sendGoogleAdsPurchaseConversion(conversion)).toBe(true);
     expect(sendGoogleAdsPurchaseConversion(conversion)).toBe(false);
 
+    expect(gtag).toHaveBeenCalledWith("config", "AW-17990986153");
     expect(gtag).toHaveBeenCalledWith("event", "conversion", {
       send_to: "AW-17990986153/BslfCL7KjIEdEKnT4oJD",
       value: 1_354.56,

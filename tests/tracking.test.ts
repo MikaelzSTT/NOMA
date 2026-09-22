@@ -6,14 +6,15 @@ import {
   GOOGLE_ADS_ID,
   getGoogleTrackingConfig,
   googleAdsConversionTarget,
+  googleTagLoaderId,
   hasGoogleAdsConversionConfig,
   hasGoogleTrackingConfig,
 } from "@/lib/tracking";
 
 describe("tracking Google", () => {
-  it("configura a Google tag da conta de Ads usada pelas conversoes", () => {
+  it("configura a Google tag fixa da conta de Ads usada pelas conversoes", () => {
     const configuredId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
-    delete process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+    process.env.NEXT_PUBLIC_GOOGLE_ADS_ID = "<!-- Google tag --><script>invalid-google-tag</script>";
     try {
       expect(GOOGLE_ADS_ID).toBe("AW-17990986153");
       expect(getGoogleTrackingConfig().googleAdsId).toBe(GOOGLE_ADS_ID);
@@ -24,6 +25,13 @@ describe("tracking Google", () => {
         process.env.NEXT_PUBLIC_GOOGLE_ADS_ID = configuredId;
       }
     }
+  });
+
+  it("carrega o gtag.js pela conta de Ads mesmo quando GA4 tambem esta configurado", () => {
+    expect(googleTagLoaderId({
+      gaMeasurementId: "G-TEST",
+      googleAdsId: GOOGLE_ADS_ID,
+    })).toBe("AW-17990986153");
   });
 
   it("so inicializa quando GA4 ou Google Ads estao configurados", () => {

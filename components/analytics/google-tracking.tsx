@@ -9,6 +9,7 @@ import {
   buildTrafficParams,
   GOOGLE_ADS_ID,
   googleAdsConversionTarget,
+  googleTagLoaderId,
   hasGoogleTrackingConfig,
   type GoogleAdsLeadConversionParams,
   type GoogleAdsPurchaseConversionParams,
@@ -59,7 +60,7 @@ export function GoogleTracking({
     <>
       <Script
         id="noma-gtag"
-        src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(config.gaMeasurementId ?? config.googleAdsId ?? "")}`}
+        src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(googleTagLoaderId(config) ?? "")}`}
         strategy="afterInteractive"
       />
       <GooglePageView config={config} />

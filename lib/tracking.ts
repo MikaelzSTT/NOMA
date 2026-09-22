@@ -47,9 +47,13 @@ const TRACKED_QUERY_PARAMS = [
 export function getGoogleTrackingConfig(): GoogleTrackingConfig {
   return {
     gaMeasurementId: cleanEnvValue(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID),
-    googleAdsId: cleanEnvValue(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID) ?? GOOGLE_ADS_ID,
+    googleAdsId: GOOGLE_ADS_ID,
     googleAdsConversionLabel: cleanEnvValue(process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL),
   };
+}
+
+export function googleTagLoaderId(config: GoogleTrackingConfig) {
+  return config.googleAdsId ?? config.gaMeasurementId;
 }
 
 export function buildGoogleAdsPurchaseConversionParams({
