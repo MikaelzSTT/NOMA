@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, MoveRight } from "lucide-react";
+import { HeroVideo } from "@/components/home/hero-video";
 import { HomeFooter } from "@/components/home/home-footer";
 import { HomeHeader } from "@/components/home/home-header";
 import { HomeMotion } from "@/components/home/home-motion";
-import { MobileHeroVideo } from "@/components/home/mobile-hero-video";
 import { NomaProductCard } from "@/components/home/noma-product-card";
 import styles from "@/components/home/noma-home.module.css";
 import { getHomeData } from "@/lib/catalog";
@@ -76,33 +76,7 @@ export async function NomaHomePage({ market }: { market: Market }) {
       {/* 3D showroom preserved in project for future reuse. */}
       <section className={styles.staticHero} id="inicio" aria-labelledby="noma-hero-title">
         <div className={styles.staticHeroStage}>
-          <div className={styles.staticHeroImage} aria-hidden="true">
-            <Image
-              src="/images/noma/living-room.webp"
-              alt=""
-              fill
-              priority
-              sizes="100vw"
-            />
-          </div>
-          <video
-            className={styles.desktopHeroVideo}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            poster="/images/noma/living-room.webp"
-            aria-hidden="true"
-            tabIndex={-1}
-          >
-            <source
-              src="/videos/noma-hero-desktop.mp4"
-              type="video/mp4"
-              media="(min-width: 641px) and (prefers-reduced-motion: no-preference)"
-            />
-          </video>
-          <MobileHeroVideo />
+          <HeroVideo />
           <div className={styles.houseShade} />
           <div className={styles.filmGrain} />
 

@@ -10,9 +10,9 @@ export function ProductCard({ product, market = product.market }: { product: Cat
   const config = MARKET_CONFIG[market];
   const image = product.images[0];
   const discount = product.discountPercent ? Math.round(Number(product.discountPercent)) : 0;
-  const spriteColumn = Number(product.attributes.spriteColumn);
-  const spriteRow = Number(product.attributes.spriteRow);
-  const isSprite = image?.url === "/images/noma/products.webp" && Number.isFinite(spriteColumn) && Number.isFinite(spriteRow);
+  const spriteColumn = product.sprite?.column ?? 0;
+  const spriteRow = product.sprite?.row ?? 0;
+  const isSprite = image?.url === "/images/noma/products.webp" && product.sprite !== null;
 
   return (
     <article className="product-card group">
@@ -43,7 +43,7 @@ export function ProductCard({ product, market = product.market }: { product: Cat
               -{discount}%
             </span>
           )}
-          {product.attributes.badge && <span className="absolute bottom-2 left-2 rounded-sm bg-ink/85 px-2 py-1 text-[10px] font-bold uppercase text-white">{String(product.attributes.badge)}</span>}
+          {product.badge && <span className="absolute bottom-2 left-2 rounded-sm bg-ink/85 px-2 py-1 text-[10px] font-bold uppercase text-white">{product.badge}</span>}
         </div>
         <div className="flex min-h-48 flex-col p-3 sm:p-4">
           <p className="mb-1 text-xs font-semibold text-brand">{product.category.name}</p>

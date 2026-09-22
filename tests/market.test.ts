@@ -141,6 +141,9 @@ describe("mercados públicos", () => {
     await expect(getProductBySlug({ slug: "missing", market: "US" })).resolves.toBeNull();
     const product = await getProductBySlug({ slug: "sofa-arco", market: "BR" });
     expect(product).not.toHaveProperty("costPrice");
+    expect(product).not.toHaveProperty("supplier");
+    expect(product).not.toHaveProperty("supplierName");
+    expect(product).not.toHaveProperty("supplierProductId");
     expect(product?.variants[0]).not.toHaveProperty("costPrice");
   });
 

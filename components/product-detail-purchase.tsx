@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Clock3, Store, Truck } from "lucide-react";
+import { Clock3, Truck } from "lucide-react";
 import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
@@ -27,7 +27,6 @@ interface ProductDetailPurchaseProps {
   shortDescription: string | null;
   rating: number | null;
   reviewCount: number | null;
-  supplierName: string;
   estimatedDelivery: string | null;
   installmentText: string | null;
   sprite?: { column: number; row: number };
@@ -55,7 +54,6 @@ export function ProductDetailPurchase({
   shortDescription,
   rating,
   reviewCount,
-  supplierName,
   estimatedDelivery,
   installmentText,
   sprite,
@@ -124,10 +122,11 @@ export function ProductDetailPurchase({
           fallback={fallback}
         />
         {installmentText && <p className={styles.installments}>{installmentText}</p>}
-        <div className={styles.commerceDetails}>
-          <p><Store size={16} /><span>{market === "US" ? "Supplied by" : "Fornecido por"} <strong>{supplierName}</strong></span></p>
-          {displayedDeliveryEstimate && <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {displayedDeliveryEstimate}</span></p>}
-        </div>
+        {displayedDeliveryEstimate && (
+          <div className={styles.commerceDetails}>
+            <p><Clock3 size={16} /><span>{market === "US" ? "Estimated delivery" : "Entrega estimada"}: {displayedDeliveryEstimate}</span></p>
+          </div>
+        )}
         {market === "BR" && (
           <form className={styles.shippingBox} onSubmit={handleShippingQuote}>
             <label htmlFor="shipping-postal-code">Calcule o frete</label>

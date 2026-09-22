@@ -24,7 +24,7 @@ export function NomaProductCard({
   const isUS = market === "US";
   const isFeatured = variant === "featured";
   const discountLabel = getDiscountLabel(product.sellingPrice, product.compareAtPrice, product.discountPercent);
-  const badge = product.attributes.badge ? String(product.attributes.badge) : null;
+  const badge = product.badge;
   const savings = product.sellingPrice && product.compareAtPrice && product.compareAtPrice > product.sellingPrice
     ? product.compareAtPrice - product.sellingPrice
     : null;
@@ -46,8 +46,8 @@ export function NomaProductCard({
             useSprite
               ? ({
                   "--product-image": `url("${image.url}")`,
-                  "--product-x": `${Number(product.attributes.spriteColumn ?? 0) * 50}%`,
-                  "--product-y": `${Number(product.attributes.spriteRow ?? 0) * 100}%`,
+                  "--product-x": `${(product.sprite?.column ?? 0) * 50}%`,
+                  "--product-y": `${(product.sprite?.row ?? 0) * 100}%`,
                   "--product-size": "300% 200%",
                 } as CSSProperties)
               : undefined

@@ -5,12 +5,12 @@ import type { Market } from "@/lib/market";
 import { getProductDisplayTitle } from "@/lib/product-display";
 import { imageDedupeKey } from "@/lib/product-gallery-images";
 import { isDisplayableColorMaterialOption, publicTextureImageUrl } from "@/lib/product-color-material-options";
+import { publicProductAttributes, type PublicProductAttributeValue } from "@/lib/public-product-attributes";
 import type { ProductFilters } from "@/lib/validation/product";
 
 const offerSelect = {
   id: true,
   market: true,
-  supplierProductId: true,
   sku: true,
   title: true,
   slug: true,
@@ -40,11 +40,9 @@ const offerSelect = {
     },
     orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
   },
-  supplier: { select: { id: true, name: true, slug: true, shippingStrategy: true } },
   product: {
     select: {
       id: true,
-      supplierName: true,
       sku: true,
       slug: true,
       title: true,
@@ -81,8 +79,6 @@ export interface CatalogProduct {
   id: string;
   productId: string;
   market: Market;
-  supplierName: string;
-  supplierProductId: string;
   sku: string;
   slug: string;
   title: string;
@@ -97,7 +93,9 @@ export interface CatalogProduct {
   availability: string;
   shippingCost: number | null;
   estimatedDelivery: string | null;
-  attributes: Record<string, string | number | boolean>;
+  attributes: Record<string, PublicProductAttributeValue>;
+  badge: string | null;
+  sprite: { column: number; row: number } | null;
   featured: boolean;
   rating: number | null;
   reviewCount: number | null;
@@ -105,7 +103,6 @@ export interface CatalogProduct {
   updatedAt: Date;
   categoryId: string;
   brandId: string | null;
-  supplier: { id: string; name: string; slug: string };
   category: { id: string; name: string; slug: string };
   brand: { id: string; name: string; slug: string } | null;
   images: Array<{ id: string; url: string; alt: string | null; position: number }>;
@@ -124,7 +121,7 @@ export interface CatalogProductVariant {
   id: string;
   label: string;
   sku: string | null;
-  attributes: Record<string, string | number | boolean>;
+  attributes: Record<string, PublicProductAttributeValue>;
   salePrice: number;
   compareAtPrice: number | null;
   stock: number;
@@ -261,7 +258,7 @@ export async function getCollectionProducts({ market = "BR", take = 12 }: { mark
 export async function listProducts(filters: ProductFilters, market: Market) {
   const where = publicWhere(filters, market);
   const skip = (filters.page - 1) * filters.pageSize;
-  const [products, total, brands, suppliers] = await Promise.all([
+  const [products, total, brands] = await Promise.all([
     db.productMarketOffer.findMany({ where, select: offerSelect, orderBy: productOrder(filters.sort), skip, take: filters.pageSize }),
     db.productMarketOffer.count({ where }),
     db.brand.findMany({
@@ -269,17 +266,11 @@ export async function listProducts(filters: ProductFilters, market: Market) {
       select: { name: true, slug: true, _count: { select: { products: true } } },
       orderBy: { name: "asc" },
     }),
-    db.supplier.findMany({
-      where: { offers: { some: { market, active: true, sellingPrice: { not: null }, availability: { not: "REMOVED" }, product: { active: true, archivedAt: null } } } },
-      select: { name: true, slug: true, _count: { select: { offers: true } } },
-      orderBy: { name: "asc" },
-    }),
   ]);
   return {
     products: products.map(toPublicProduct),
     total,
     brands: brands.map((brand) => ({ ...brand, _count: { products: brand._count.products } })),
-    suppliers: suppliers.map((supplier) => ({ ...supplier, _count: { products: supplier._count.offers } })),
     totalPages: Math.max(1, Math.ceil(total / filters.pageSize)),
   };
 }
@@ -386,12 +377,13 @@ export async function getSitemapCategories(market: Market) {
 
 function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
   const product = offer.product;
+  const presentation = productPresentation(product.attributes);
   const rawOfferVariants = Array.isArray(offer.variants) ? offer.variants : [];
   const offerVariants = rawOfferVariants.map((variant) => ({
     id: variant.id,
     label: variant.label,
     sku: variant.sku,
-    attributes: publicAttributes(variant.attributes),
+    attributes: publicProductAttributes(variant.attributes),
     salePrice: Number(variant.salePrice),
     compareAtPrice: variant.compareAtPrice == null ? null : Number(variant.compareAtPrice),
     stock: variant.stock,
@@ -411,8 +403,6 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     id: offer.id,
     productId: offer.productId,
     market: offer.market as Market,
-    supplierName: offer.supplier.name,
-    supplierProductId: offer.supplierProductId,
     sku: offer.sku || product.sku,
     slug: offer.slug,
     title: getProductDisplayTitle(offer.title ?? product.title, offer.market as Market),
@@ -427,7 +417,9 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     availability: defaultOfferVariant?.availability ?? offer.availability,
     shippingCost: offer.shippingCost == null ? null : Number(offer.shippingCost),
     estimatedDelivery: deliveryLabel(offer.market as Market, offer.estimatedDeliveryMinDays, offer.estimatedDeliveryMaxDays),
-    attributes: publicAttributes(product.attributes),
+    attributes: publicProductAttributes(product.attributes),
+    badge: presentation.badge,
+    sprite: presentation.sprite,
     featured: offer.featured,
     rating: product.rating == null ? null : Number(product.rating),
     reviewCount: product.reviewCount,
@@ -435,7 +427,6 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     updatedAt: offer.updatedAt,
     categoryId: product.categoryId,
     brandId: product.brandId,
-    supplier: { id: offer.supplier.id, name: offer.supplier.name, slug: offer.supplier.slug },
     category: product.category,
     brand: product.brand,
     images,
@@ -451,7 +442,7 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
       id: variant.id,
       label: variant.title,
       sku: variant.sku,
-      attributes: publicAttributes(variant.options),
+      attributes: publicProductAttributes(variant.options),
       salePrice: variant.sellingPrice == null ? sellingPrice ?? 0 : Number(variant.sellingPrice),
       compareAtPrice: null,
       stock: variant.stock,
@@ -460,6 +451,22 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
       isDefault: index === 0,
     })),
   };
+}
+
+function productPresentation(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { badge: null, sprite: null };
+  }
+
+  const attributes = value as Record<string, unknown>;
+  const badge = typeof attributes.badge === "string" && attributes.badge.trim()
+    ? attributes.badge.trim()
+    : null;
+  const column = Number(attributes.spriteColumn);
+  const row = Number(attributes.spriteRow);
+  const sprite = Number.isFinite(column) && Number.isFinite(row) ? { column, row } : null;
+
+  return { badge, sprite };
 }
 
 type PublicImageInput = { id?: string; url: string; alt?: string | null; position?: number | null; isPrimary?: boolean | null };
@@ -527,14 +534,6 @@ function dedupePublicImages(images: Array<{ id: string; url: string; alt: string
     seen.add(key);
     return [{ id: image.id, url: image.url.trim(), alt: image.alt, position }];
   });
-}
-
-function publicAttributes(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter(([key, item]) =>
-    !/(cost|custo|wholesale|atacado|supplier.*price)/i.test(key)
-    && ["string", "number", "boolean"].includes(typeof item),
-  )) as Record<string, string | number | boolean>;
 }
 
 function deliveryLabel(market: Market, minDays: number | null, maxDays: number | null) {

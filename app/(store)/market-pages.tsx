@@ -13,6 +13,7 @@ import productStyles from "@/components/product-detail.module.css";
 import { getCategory, getEquivalentProductSlug, getProductBySlug, getRelatedProducts, listProducts } from "@/lib/catalog";
 import { MARKET_CONFIG, categoryPath, collectionsPath, productPath, searchPath, type Market } from "@/lib/market";
 import type { ProductCategorySlug } from "@/lib/product-categories";
+import { publicProductSpecifications } from "@/lib/public-product-attributes";
 import { parseProductFilters, type RawSearchParams } from "@/lib/search-params";
 import { absoluteUrl } from "@/lib/utils";
 
@@ -54,9 +55,9 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
   const product = await getProductBySlug({ slug, market });
   if (!product) notFound();
   const related = await getRelatedProducts(product, market);
-  const specs = Object.entries(product.attributes).filter(([key]) => !["badge", "spriteColumn", "spriteRow"].includes(key));
+  const specs = publicProductSpecifications(product.attributes);
   const sprite = product.images[0]?.url === "/images/noma/products.webp"
-    ? { column: Number(product.attributes.spriteColumn ?? 0), row: Number(product.attributes.spriteRow ?? 0) }
+    ? product.sprite ?? undefined
     : undefined;
   const jsonLd = buildProductSchema(product, market);
   const isUS = market === "US";
@@ -77,7 +78,6 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
           shortDescription={product.shortDescription}
           rating={product.rating ? Number(product.rating) : null}
           reviewCount={product.reviewCount}
-          supplierName={product.supplier.name}
           estimatedDelivery={product.estimatedDelivery}
           installmentText={product.installmentText}
           sprite={sprite}
@@ -159,7 +159,7 @@ export async function MarketSearchPage({ searchParams, market }: SearchProps & {
         <div><p className="eyebrow">{isUS ? "Catalog" : "Catalogo"}</p><h1>{title}</h1></div>
       </div>
       <div className="catalog-layout">
-        <CatalogFilters market={market} filters={filters} brands={result.brands} suppliers={result.suppliers} query={filters.q} />
+        <CatalogFilters market={market} filters={filters} brands={result.brands} query={filters.q} />
         <div className="min-w-0">
           <CatalogToolbar market={market} total={result.total} filters={filters} />
           <CatalogResults market={market} products={result.products} />
@@ -175,8 +175,8 @@ export async function categoryMetadata({ params, market }: CategoryProps & { mar
   const category = await getCategory(slug, market);
   if (!category) return { robots: { index: false, follow: false } };
   const description = market === "US"
-    ? `Compare ${category.name} products, filter offers, and review the responsible source store.`
-    : `Compare produtos de ${category.name}, filtre ofertas e acesse a loja responsavel pela venda.`;
+    ? `Compare ${category.name} products, prices, ratings, and availability.`
+    : `Compare produtos de ${category.name}, preços, avaliações e disponibilidade.`;
   const path = categoryPath(market, slug);
   return {
     title: category.name,
@@ -202,7 +202,7 @@ export async function MarketCategoryPage({ params, searchParams, market }: Categ
         {category.description && <p>{category.description}</p>}
       </div>
       <div className="catalog-layout">
-        <CatalogFilters market={market} filters={filters} brands={result.brands} suppliers={result.suppliers} />
+        <CatalogFilters market={market} filters={filters} brands={result.brands} />
         <div className="min-w-0">
           <CatalogToolbar market={market} total={result.total} filters={filters} />
           <CatalogResults market={market} products={result.products} />

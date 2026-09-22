@@ -7,13 +7,11 @@ interface Facet { name: string; slug: string; _count: { products: number } }
 export function CatalogFilters({
   filters,
   brands,
-  suppliers,
   query,
   market = "BR",
 }: {
   filters: ProductFilters;
   brands: Facet[];
-  suppliers: Facet[];
   query?: string;
   market?: Market;
 }) {
@@ -37,12 +35,6 @@ export function CatalogFilters({
             <legend className="filter-title">{market === "US" ? "Brand" : "Marca"}</legend>
             <div className="filter-options">
               {brands.map((brand) => <CheckOption key={brand.slug} name="brand" value={brand.slug} label={brand.name} count={brand._count.products} checked={filters.brand.includes(brand.slug)} />)}
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend className="filter-title">{market === "US" ? "Supplier" : "Fornecedor"}</legend>
-            <div className="filter-options">
-              {suppliers.map((supplier) => <CheckOption key={supplier.slug} name="supplier" value={supplier.slug} label={supplier.name} count={supplier._count.products} checked={filters.supplier.includes(supplier.slug)} />)}
             </div>
           </fieldset>
           <fieldset>

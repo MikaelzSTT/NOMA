@@ -366,39 +366,61 @@
   object-position: center;
 }
 
-.staticHeroImage {
+.heroVideoLoading {
   position: absolute;
   inset: 0;
-  z-index: 0;
-  background: #6e6a61;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(91, 88, 80, 0.34), transparent 42%),
+    #26251f;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  transition:
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
 }
 
-.staticHeroImage img {
+.heroVideoLoading span {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-top-color: rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  animation: showroomLoad 900ms linear infinite;
+}
+
+.heroVideoLoadingHidden {
+  opacity: 0;
+  visibility: hidden;
+  transition-delay: 0s, 360ms;
+}
+
+.heroVideo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  width: 100%;
+  height: 100%;
+  background: #26251f;
   object-fit: cover;
   object-position: center;
-}
-
-.mobileHeroVideo {
-  display: none;
-}
-
-.desktopHeroVideo {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (min-width: 641px) and (prefers-reduced-motion: no-preference) {
-  .desktopHeroVideo {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
+  .heroVideo {
     display: block;
-    width: 100%;
-    height: 100%;
-    background: #6e6a61;
-    object-fit: cover;
-    object-position: center;
-    pointer-events: none;
   }
+}
+
+.heroVideoReady {
+  opacity: 1;
 }
 
 .sceneCanvas {
@@ -2357,27 +2379,13 @@
     color: var(--ink);
   }
 
-  .sceneFallback img,
-  .staticHeroImage img {
+  .sceneFallback img {
     object-position: 60% center;
   }
 
-  .mobileHeroVideo {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
+  .heroVideo {
     display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
     object-position: center center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .mobileHeroVideoPlaying {
-    opacity: 1;
   }
 
   .heroContent {
@@ -2886,8 +2894,13 @@
     scroll-behavior: auto;
   }
 
-  .mobileHeroVideo {
+  .heroVideo {
     display: none;
+  }
+
+  .heroVideoLoading span {
+    display: none;
+    animation: none;
   }
 
   .houseScroll {
