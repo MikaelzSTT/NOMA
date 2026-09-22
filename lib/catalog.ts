@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { Market } from "@/lib/market";
+import { getProductDisplayTitle } from "@/lib/product-display";
 import { imageDedupeKey } from "@/lib/product-gallery-images";
 import { isDisplayableColorMaterialOption, publicTextureImageUrl } from "@/lib/product-color-material-options";
 import type { ProductFilters } from "@/lib/validation/product";
@@ -171,6 +172,22 @@ function publicWhere(filters: ProductFilters, market: Market): Prisma.ProductMar
   };
 }
 
+const sofaProductMatch: Prisma.ProductMarketOfferWhereInput = {
+  OR: [
+    { title: { contains: "sofa", mode: "insensitive" } },
+    { title: { contains: "sofá", mode: "insensitive" } },
+    { title: { contains: "padova", mode: "insensitive" } },
+    { product: { title: { contains: "sofa", mode: "insensitive" } } },
+    { product: { title: { contains: "sofá", mode: "insensitive" } } },
+    { product: { title: { contains: "padova", mode: "insensitive" } } },
+    { product: { subcategory: { contains: "sofa", mode: "insensitive" } } },
+    { product: { subcategory: { contains: "sofá", mode: "insensitive" } } },
+    { product: { category: { name: { contains: "sofa", mode: "insensitive" } } } },
+    { product: { category: { name: { contains: "sofá", mode: "insensitive" } } } },
+    { product: { category: { slug: { contains: "sofa", mode: "insensitive" } } } },
+  ],
+};
+
 function productOrder(sort: ProductFilters["sort"]): Prisma.ProductMarketOfferOrderByWithRelationInput[] {
   switch (sort) {
     case "price-asc": return [{ sellingPrice: "asc" }, { popularityScore: "desc" }];
@@ -189,6 +206,56 @@ export async function getHomeData({ market }: { market: Market }) {
     orderBy: [{ featured: "desc" }, { popularityScore: "desc" }, { createdAt: "desc" }],
   });
   return { products: products.map(toPublicProduct) };
+}
+
+export async function getSofaProducts({ market = "BR" }: { market?: Market } = {}) {
+  const products = await db.productMarketOffer.findMany({
+    where: {
+      market,
+      active: true,
+      sellingPrice: { not: null },
+      availability: { not: "REMOVED" },
+      product: { active: true, archivedAt: null },
+      ...sofaProductMatch,
+    },
+    select: offerSelect,
+    orderBy: [{ featured: "desc" }, { popularityScore: "desc" }, { createdAt: "desc" }],
+  });
+  return products.map(toPublicProduct);
+}
+
+export async function getCollectionProducts({ market = "BR", take = 12 }: { market?: Market; take?: number } = {}) {
+  const sofas = await db.productMarketOffer.findMany({
+    where: {
+      market,
+      active: true,
+      sellingPrice: { not: null },
+      availability: { not: "REMOVED" },
+      product: { active: true, archivedAt: null },
+      ...sofaProductMatch,
+    },
+    select: offerSelect,
+    orderBy: [{ featured: "desc" }, { popularityScore: "desc" }, { createdAt: "desc" }],
+    take,
+  });
+  const remaining = Math.max(0, take - sofas.length);
+  if (!remaining) return sofas.map(toPublicProduct);
+
+  const otherProducts = await db.productMarketOffer.findMany({
+    where: {
+      id: { notIn: sofas.map((product) => product.id) },
+      market,
+      active: true,
+      sellingPrice: { not: null },
+      availability: { not: "REMOVED" },
+      product: { active: true, archivedAt: null },
+    },
+    select: offerSelect,
+    orderBy: [{ featured: "desc" }, { popularityScore: "desc" }, { createdAt: "desc" }],
+    take: remaining,
+  });
+
+  return [...sofas, ...otherProducts].map(toPublicProduct);
 }
 
 export async function listProducts(filters: ProductFilters, market: Market) {
@@ -294,7 +361,7 @@ export async function getSearchSuggestions(query: string, market: Market) {
     take: 6,
   });
   return products.map((offer) => ({
-    title: offer.title ?? offer.product.title,
+    title: getProductDisplayTitle(offer.title ?? offer.product.title, market),
     slug: offer.slug,
     sellingPrice: offer.sellingPrice ? Number(offer.sellingPrice) : null,
     currency: offer.currency,
@@ -348,7 +415,7 @@ function toPublicProduct(offer: PublicOfferRow): CatalogProduct {
     supplierProductId: offer.supplierProductId,
     sku: offer.sku || product.sku,
     slug: offer.slug,
-    title: offer.title ?? product.title,
+    title: getProductDisplayTitle(offer.title ?? product.title, offer.market as Market),
     shortDescription: offer.shortDescription ?? product.shortDescription,
     description: offer.description ?? product.description,
     subcategory: product.subcategory,

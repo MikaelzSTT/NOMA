@@ -11,6 +11,7 @@ import { toAdminOfferVariants } from "@/lib/admin/offer-variant-mapper";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, MARKETS, isMarket, type Market } from "@/lib/market";
+import { getProductDisplayTitle } from "@/lib/product-display";
 import { PRODUCT_CATEGORIES } from "@/lib/product-categories";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -113,7 +114,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
   const offerImages = selectedOffer && Array.isArray(selectedOffer.images)
     ? selectedOffer.images.flatMap((item) => item && typeof item === "object" && !Array.isArray(item) && "url" in item ? [String(item.url)] : [])
     : product.images.map((image) => image.url);
-  const editTitle = selectedOffer?.title ?? product.title;
+  const editTitle = getProductDisplayTitle(selectedOffer?.title ?? product.title, selectedMarket);
   const editShortDescription = selectedOffer?.shortDescription ?? product.shortDescription ?? "";
   const editDescription = selectedOffer?.description ?? product.description ?? "";
   const initialVariants = toAdminOfferVariants(selectedOffer, product);
@@ -121,7 +122,7 @@ export default async function AdminProductEditPage({ params, searchParams }: Pro
   return (
     <div className="admin-page max-w-5xl">
       <Link href="/admin/produtos" className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-brand"><ArrowLeft size={16} /> Voltar para produtos</Link>
-      <div className="admin-heading"><div><p className="eyebrow">Edição interna</p><h1>{product.title}</h1><p>Dados comerciais e editoriais do catálogo interno.</p></div></div>
+      <div className="admin-heading"><div><p className="eyebrow">Edição interna</p><h1>{getProductDisplayTitle(product.title, selectedMarket)}</h1><p>Dados comerciais e editoriais do catálogo interno.</p></div></div>
       {raw.saved === "ok" && <div className="admin-alert success">Alterações salvas.</div>}
       {raw.saved === "created" && <div className="admin-alert success">Produto manual criado.</div>}
       {raw.saved === "error" && <div className="admin-alert error">Não foi possível validar as alterações.</div>}

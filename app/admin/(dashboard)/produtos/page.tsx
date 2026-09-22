@@ -6,6 +6,7 @@ import { archiveProductAction, toggleProductAction } from "@/app/admin/actions";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MARKET_CONFIG, isMarket, type Market } from "@/lib/market";
+import { getProductDisplayTitle } from "@/lib/product-display";
 import { formatMoney } from "@/lib/utils";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -64,7 +65,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
             const margin = cost != null && selling != null ? selling - cost : null;
             const currency = selectedOffer?.currency ?? product.currency;
             return <tr key={product.id}>
-              <td><div className="flex min-w-64 items-center gap-3"><span className="relative size-11 shrink-0 overflow-hidden rounded-sm bg-surface">{product.images[0] && <Image src={product.images[0].url} alt="" fill sizes="44px" className="object-cover" />}</span><span><strong className="block text-sm text-ink">{product.title}</strong><small className="text-muted">{product.sku}</small>{product.syncError && <small className="mt-1 block max-w-48 truncate text-red-700" title={product.syncError}>{product.syncError}</small>}</span></div></td>
+              <td><div className="flex min-w-64 items-center gap-3"><span className="relative size-11 shrink-0 overflow-hidden rounded-sm bg-surface">{product.images[0] && <Image src={product.images[0].url} alt="" fill sizes="44px" className="object-cover" />}</span><span><strong className="block text-sm text-ink">{getProductDisplayTitle(product.title, selectedOffer?.market ?? "BR")}</strong><small className="text-muted">{product.sku}</small>{product.syncError && <small className="mt-1 block max-w-48 truncate text-red-700" title={product.syncError}>{product.syncError}</small>}</span></div></td>
               <td>{selectedOffer ? MARKET_CONFIG[selectedOffer.market].label : "Sem oferta"}</td><td>{selectedOffer?.supplier.name ?? product.supplier.name}</td><td>{product.category.name}</td><td>{cost == null ? "—" : formatMoney(cost, currency)}</td><td>{selling == null ? "Sem preço" : formatMoney(selling, currency)}</td><td>{margin == null ? "—" : formatMoney(margin, currency)}</td><td>{selectedOffer?.stockQuantity ?? product.stock}</td>
               <td><form action={toggleProductAction}><input type="hidden" name="id" value={product.id} /><input type="hidden" name="active" value={String(!product.active)} /><button className={`status-pill ${product.active && !product.archivedAt ? "active" : "inactive"}`}>{product.archivedAt ? "Arquivado" : product.active ? "Ativo" : "Inativo"}</button></form></td>
               <td><div className="flex gap-1"><Link href={`/admin/produtos/${product.id}`} className="icon-button" title="Editar produto"><Pencil size={17} /><span className="sr-only">Editar</span></Link>{!product.archivedAt && <form action={archiveProductAction}><input type="hidden" name="id" value={product.id} /><button className="icon-button" title="Arquivar produto"><Archive size={17} /><span className="sr-only">Arquivar</span></button></form>}</div></td>

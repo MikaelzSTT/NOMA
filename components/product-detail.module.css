@@ -23,6 +23,26 @@
   font-family: var(--font-geist-sans), Arial, sans-serif;
 }
 
+.productPage[data-market="BR"] {
+  --noma-paper: #fff;
+  --noma-paper-light: #fff;
+  --noma-card: #fff;
+  background: #fff;
+}
+
+.productPage[data-market="BR"] .productDetail {
+  --noma-paper: #fff;
+  --noma-paper-light: #fff;
+  --noma-card: #fff;
+}
+
+.productPage[data-market="BR"] .gallery,
+.productPage[data-market="BR"] .galleryMain,
+.productPage[data-market="BR"] .thumbnail,
+.productPage[data-market="BR"] .materialPreviewVisual {
+  background: #fff;
+}
+
 .productShell {
   width: min(calc(100% - 6rem), 1500px);
   margin-inline: auto;

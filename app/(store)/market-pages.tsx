@@ -62,7 +62,7 @@ export async function MarketProductPage({ params, market }: ProductProps & { mar
   const isUS = market === "US";
 
   return (
-    <div className={productStyles.productPage}>
+    <div className={productStyles.productPage} data-market={market}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className={productStyles.productShell}>
         <Breadcrumbs market={market} items={[{ label: product.category.name, href: categoryPath(market, product.category.slug) }, { label: product.title }]} />

@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/db", () => ({ db: mocks.db }));
 
 import { productMetadata } from "@/app/(store)/market-pages";
-import { getHomeData, getProductBySlug } from "@/lib/catalog";
+import { getCollectionProducts, getHomeData, getProductBySlug, getSofaProducts } from "@/lib/catalog";
 import { MARKET_COOKIE, offerIdentityKey, productPath } from "@/lib/market";
 import { upsertCatalogProduct } from "@/services/catalog-products";
 import { resolveMarketRedirect } from "@/proxy";
@@ -86,6 +86,55 @@ describe("mercados públicos", () => {
     const { products } = await getHomeData({ market: "US" });
     expect(mocks.db.productMarketOffer.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ market: "US" }) }));
     expect(products[0]).toMatchObject({ market: "US", currency: "USD", sellingPrice: 1890 });
+  });
+
+  it("lista sofás publicados do mercado BR por título, subcategoria ou categoria", async () => {
+    mocks.db.productMarketOffer.findMany.mockResolvedValueOnce([mocks.brOffer]);
+
+    const products = await getSofaProducts({ market: "BR" });
+    const query = mocks.db.productMarketOffer.findMany.mock.calls.at(-1)?.[0];
+
+    expect(query).toMatchObject({
+      where: {
+        market: "BR",
+        active: true,
+        sellingPrice: { not: null },
+        availability: { not: "REMOVED" },
+        product: { active: true, archivedAt: null },
+        OR: expect.arrayContaining([
+          { product: { title: { contains: "sofa", mode: "insensitive" } } },
+          { product: { subcategory: { contains: "sofá", mode: "insensitive" } } },
+          { product: { category: { slug: { contains: "sofa", mode: "insensitive" } } } },
+        ]),
+      },
+    });
+    expect(products).toHaveLength(1);
+    expect(products[0]).toMatchObject({ market: "BR", slug: "sofa-arco", sellingPrice: 8940 });
+  });
+
+  it("prioriza sofás e completa a seleção editorial com outros produtos publicados", async () => {
+    const sofa = offerRow("BR", "sofa-arco", "BRL", 8940);
+    const chair = offerRow("BR", "poltrona-lume", "BRL", 4200);
+    chair.id = "offer-chair";
+    chair.productId = "product-chair";
+    chair.product.id = "product-chair";
+    chair.product.slug = "poltrona-lume";
+    chair.product.title = "Poltrona Lume";
+    chair.product.category = { id: "cat-1", name: "Móveis", slug: "moveis" };
+    mocks.db.productMarketOffer.findMany
+      .mockResolvedValueOnce([sofa])
+      .mockResolvedValueOnce([chair]);
+
+    const products = await getCollectionProducts({ market: "BR", take: 2 });
+
+    expect(products.map((product) => product.title)).toEqual(["Sofá Arco", "Poltrona Lume"]);
+    expect(mocks.db.productMarketOffer.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: expect.objectContaining({
+        market: "BR",
+        id: { notIn: [sofa.id] },
+      }),
+      take: 1,
+    }));
   });
 
   it("não retorna produto sem oferta no mercado e não expõe costPrice", async () => {
