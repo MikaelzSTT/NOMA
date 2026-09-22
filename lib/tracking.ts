@@ -1,8 +1,8 @@
 import type { Market } from "@/lib/market";
 
-export const GOOGLE_ADS_ID = "AW-415422628";
-export const GOOGLE_ADS_PURCHASE_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/yavHCK-WzP4cEKSxi8YB`;
-export const GOOGLE_ADS_LEAD_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/_2feCLKWzP4cEKSxi8YB`;
+export const GOOGLE_ADS_ID = "AW-17990986153";
+export const GOOGLE_ADS_PURCHASE_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/BslfCL7KjIEdEKnT4oJD`;
+export const GOOGLE_ADS_LEAD_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/8MvVCLnLjIEdEKnT4oJD`;
 
 export type GoogleTrackingConfig = {
   gaMeasurementId?: string;

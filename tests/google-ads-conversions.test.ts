@@ -39,7 +39,7 @@ describe("conversoes Google Ads", () => {
     expect(sendGoogleAdsPurchaseConversion(conversion)).toBe(false);
 
     expect(gtag).toHaveBeenCalledWith("event", "conversion", {
-      send_to: "AW-415422628/yavHCK-WzP4cEKSxi8YB",
+      send_to: "AW-17990986153/BslfCL7KjIEdEKnT4oJD",
       value: 1_354.56,
       currency: "BRL",
       transaction_id: "BRORDER0001",
@@ -51,7 +51,7 @@ describe("conversoes Google Ads", () => {
     expect(sendGoogleAdsLeadConversion("request-1")).toBe(true);
 
     expect(gtag).toHaveBeenCalledWith("event", "conversion", {
-      send_to: "AW-415422628/_2feCLKWzP4cEKSxi8YB",
+      send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD",
       transaction_id: "request-1",
     });
   });
