@@ -55,7 +55,7 @@ export async function createMercadoPagoPreference(input: MercadoPagoPreferenceIn
 
   const payload = await safeJson(response);
   if (!response.ok) {
-    throw new MercadoPagoApiError("preference_create_failed", response.status);
+    throw new MercadoPagoApiError("preference_create_failed", response.status, safeErrorResponse(payload));
   }
 
   const id = stringField(payload, "id");
@@ -107,9 +107,25 @@ export function verifyMercadoPagoWebhookSignature(input: {
 }
 
 export class MercadoPagoApiError extends Error {
-  constructor(public readonly code: string, public readonly status: number) {
+  constructor(
+    public readonly code: string,
+    public readonly status: number,
+    public readonly responseBody: SafeMercadoPagoErrorResponse | null = null,
+  ) {
     super(code);
   }
+}
+
+export function safeMercadoPagoErrorLog(error: unknown) {
+  if (!(error instanceof MercadoPagoApiError)) return { code: "unknown" };
+  return {
+    code: error.code,
+    status: error.status,
+    message: error.responseBody?.message ?? null,
+    error: error.responseBody?.error ?? null,
+    cause: error.responseBody?.cause ?? [],
+    responseBody: error.responseBody,
+  };
 }
 
 function requireMercadoPagoAccessToken() {
@@ -131,6 +147,53 @@ function stringField(payload: unknown, key: string) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
   const value = (payload as Record<string, unknown>)[key];
   return typeof value === "string" && value ? value : undefined;
+}
+
+type SafeMercadoPagoErrorResponse = {
+  message: string | null;
+  error: string | null;
+  status: number | string | null;
+  cause: Array<{
+    code: number | string | null;
+    description: string | null;
+    message: string | null;
+    field: string | null;
+  }>;
+};
+
+function safeErrorResponse(payload: unknown): SafeMercadoPagoErrorResponse | null {
+  const record = objectRecord(payload);
+  if (!record) return null;
+  const rawCause = Array.isArray(record.cause) ? record.cause.slice(0, 10) : [];
+  return {
+    message: limitedString(record.message, 500),
+    error: limitedString(record.error, 200),
+    status: safeStatus(record.status),
+    cause: rawCause.map((item) => {
+      const cause = objectRecord(item);
+      return {
+        code: safeStatus(cause?.code),
+        description: limitedString(cause?.description, 500),
+        message: limitedString(cause?.message, 500),
+        field: limitedString(cause?.field, 200),
+      };
+    }),
+  };
+}
+
+function objectRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function limitedString(value: unknown, maximum: number) {
+  return typeof value === "string" ? value.slice(0, maximum) : null;
+}
+
+function safeStatus(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return typeof value === "string" ? value.slice(0, 100) : null;
 }
 
 function parseSignatureHeader(value: string | null) {

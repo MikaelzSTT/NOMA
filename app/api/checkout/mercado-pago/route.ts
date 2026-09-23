@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import { safeMercadoPagoErrorLog } from "@/lib/mercado-pago";
 import { createMercadoPagoCheckout, NOMA_TRAFFIC_ATTRIBUTION_COOKIE, NOMA_TRAFFIC_SESSION_COOKIE } from "@/lib/orders";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -60,11 +61,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[Mercado Pago checkout] failed", publicErrorCode(error));
+    console.error("[Mercado Pago checkout] failed", JSON.stringify(safeMercadoPagoErrorLog(error)));
     return NextResponse.json({ type: "error", error: "checkout_failed", message: "Nao foi possivel iniciar o checkout agora." }, { status: 500 });
   }
-}
-
-function publicErrorCode(error: unknown) {
-  return error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
 }
