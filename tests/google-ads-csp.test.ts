@@ -12,6 +12,7 @@ describe("CSP do Google Ads", () => {
     expect(directive(policy!, "script-src")).toEqual(expect.arrayContaining([
       "https://www.googletagmanager.com",
       "https://www.googleadservices.com",
+      "https://googleads.g.doubleclick.net",
       "https://www.google.com",
     ]));
     expect(directive(policy!, "connect-src")).toEqual(expect.arrayContaining([

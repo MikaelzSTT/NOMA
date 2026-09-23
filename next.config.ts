@@ -15,6 +15,7 @@ const scriptSources = [
     ? [
       "https://www.googletagmanager.com",
       "https://www.googleadservices.com",
+      "https://googleads.g.doubleclick.net",
       "https://www.google.com",
     ]
     : []),
