@@ -11,7 +11,13 @@ const scriptSources = [
   "'self'",
   "'unsafe-inline'",
   ...(isDevelopment ? ["'unsafe-eval'"] : []),
-  ...(hasGoogleTracking ? ["https://www.googletagmanager.com"] : []),
+  ...(hasGoogleTracking
+    ? [
+      "https://www.googletagmanager.com",
+      "https://www.googleadservices.com",
+      "https://www.google.com",
+    ]
+    : []),
 ];
 const connectSources = [
   "'self'",
@@ -25,6 +31,10 @@ const connectSources = [
       "https://www.googletagmanager.com",
       "https://googleads.g.doubleclick.net",
       "https://www.googleadservices.com",
+      "https://pagead2.googlesyndication.com",
+      "https://www.google.com",
+      "https://www.google.com.br",
+      "https://ad.doubleclick.net",
     ]
     : []),
 ];
@@ -35,6 +45,7 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   `connect-src ${connectSources.join(" ")}`,
+  ...(hasGoogleTracking ? ["frame-src https://www.googletagmanager.com"] : []),
   "object-src 'none'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
