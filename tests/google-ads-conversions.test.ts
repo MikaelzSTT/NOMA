@@ -56,4 +56,33 @@ describe("conversoes Google Ads", () => {
       transaction_id: "request-1",
     });
   });
+
+  it("cria o gtag com o formato arguments esperado pelo script do Google", () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        dataLayer: [],
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => storage.set(key, value),
+        },
+      },
+    });
+
+    expect(sendGoogleAdsLeadConversion("request-arguments")).toBe(true);
+
+    const dataLayer = window.dataLayer!;
+    expect(dataLayer).toHaveLength(3);
+    expect(Array.isArray(dataLayer[0])).toBe(false);
+    expect(Array.from(dataLayer[0] as ArrayLike<unknown>)).toEqual(["js", expect.any(Date)]);
+    expect(Array.from(dataLayer[1] as ArrayLike<unknown>)).toEqual(["config", "AW-17990986153"]);
+    expect(Array.from(dataLayer[2] as ArrayLike<unknown>)).toEqual([
+      "event",
+      "conversion",
+      {
+        send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD",
+        transaction_id: "request-arguments",
+      },
+    ]);
+  });
 });

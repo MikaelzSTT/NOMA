@@ -213,8 +213,10 @@ function GoogleEvent({
 
 function configureGoogleTags(config: GoogleTrackingConfig) {
   window.dataLayer ??= [];
-  window.gtag ??= (...args: unknown[]) => {
-    window.dataLayer?.push(args);
+  window.gtag ??= function gtag() {
+    // gtag.js distinguishes its command queue by the native Arguments object.
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer?.push(arguments);
   };
 
   if (!window.__NOMA_GTAG_INITIALIZED__) {
