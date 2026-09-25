@@ -2,12 +2,38 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Clock3, RotateCcw, XCircle } from "lucide-react";
 import { GoogleAdsPurchaseConversion } from "@/components/analytics/google-tracking";
-import { getPublicOrder } from "@/lib/orders";
+import { getPublicOrder, reconcileMercadoPagoReturn } from "@/lib/orders";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 type ReturnState = "success" | "pending" | "failure";
 
-export async function PedidoStatus({ orderNumber, state }: { orderNumber: string; state: ReturnState }) {
+export async function PedidoStatus({
+  orderNumber,
+  state,
+  mercadoPagoPaymentId,
+}: {
+  orderNumber: string;
+  state: ReturnState;
+  mercadoPagoPaymentId?: string;
+}) {
+  if (mercadoPagoPaymentId) {
+    try {
+      const result = await reconcileMercadoPagoReturn(orderNumber, mercadoPagoPaymentId);
+      console.info("[Mercado Pago return] reconciliation", JSON.stringify({
+        orderNumber,
+        paymentId: mercadoPagoPaymentId,
+        updated: result.updated,
+        reason: "reason" in result ? result.reason : null,
+      }));
+    } catch (error) {
+      console.error("[Mercado Pago return] reconciliation failed", JSON.stringify({
+        orderNumber,
+        paymentId: mercadoPagoPaymentId,
+        error: error && typeof error === "object" && "code" in error ? String(error.code) : "unknown",
+      }));
+    }
+  }
+
   const order = await getPublicOrder(orderNumber);
   if (!order || order.market !== "BR") notFound();
   const content = contentFor(order.paymentStatus, state);
@@ -66,6 +92,17 @@ export async function PedidoStatus({ orderNumber, state }: { orderNumber: string
       </main>
     </>
   );
+}
+
+export type MercadoPagoReturnSearchParams = Record<string, string | string[] | undefined>;
+
+export function paymentIdFromMercadoPagoReturn(searchParams: MercadoPagoReturnSearchParams) {
+  return firstSearchParam(searchParams.payment_id) ?? firstSearchParam(searchParams.collection_id);
+}
+
+function firstSearchParam(value: string | string[] | undefined) {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first?.trim() || undefined;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

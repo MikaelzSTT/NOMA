@@ -1,10 +1,13 @@
-import { PedidoStatus } from "../pedido-status";
+import { paymentIdFromMercadoPagoReturn, PedidoStatus, type MercadoPagoReturnSearchParams } from "../pedido-status";
 
-type Props = { params: Promise<{ order: string }> };
+type Props = {
+  params: Promise<{ order: string }>;
+  searchParams: Promise<MercadoPagoReturnSearchParams>;
+};
 
 export const dynamic = "force-dynamic";
 
-export default async function PedidoPendentePage({ params }: Props) {
-  const { order } = await params;
-  return <PedidoStatus orderNumber={order} state="pending" />;
+export default async function PedidoPendentePage({ params, searchParams }: Props) {
+  const [{ order }, query] = await Promise.all([params, searchParams]);
+  return <PedidoStatus orderNumber={order} state="pending" mercadoPagoPaymentId={paymentIdFromMercadoPagoReturn(query)} />;
 }

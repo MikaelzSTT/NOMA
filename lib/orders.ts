@@ -35,6 +35,7 @@ type CheckoutContext = {
 type WebhookContext = {
   getPayment?: typeof getMercadoPagoPayment;
   now?: Date;
+  expectedExternalReference?: string;
 };
 
 type ShippingAddressInput = {
@@ -196,13 +197,24 @@ export async function getPublicOrder(publicOrderNumber: string) {
 }
 
 export async function applyMercadoPagoPaymentUpdate(paymentId: string, context: WebhookContext = {}) {
-  const payment = await (context.getPayment ?? getMercadoPagoPayment)(paymentId);
+  const normalizedPaymentId = normalizeMercadoPagoPaymentId(paymentId);
+  if (!normalizedPaymentId) return { updated: false, reason: "invalid_payment_id" as const };
+
+  const payment = await (context.getPayment ?? getMercadoPagoPayment)(normalizedPaymentId);
+  if (String(payment.id) !== normalizedPaymentId) {
+    return { updated: false, reason: "payment_id_mismatch" as const };
+  }
   const externalReference = sanitizeText(payment.external_reference ?? "", 80);
   if (!externalReference) return { updated: false, reason: "missing_external_reference" as const };
+  if (context.expectedExternalReference && externalReference !== context.expectedExternalReference) {
+    return { updated: false, reason: "external_reference_mismatch" as const };
+  }
 
   const order = await db.order.findUnique({ where: { externalReference } });
   if (!order) return { updated: false, reason: "order_not_found" as const };
-  if (order.currency !== payment.currency_id) return { updated: false, reason: "currency_mismatch" as const };
+  if (order.currency !== "BRL" || payment.currency_id !== "BRL" || order.currency !== payment.currency_id) {
+    return { updated: false, reason: "currency_mismatch" as const };
+  }
   if (roundMoney(Number(payment.transaction_amount)) !== roundMoney(Number(order.total))) {
     return { updated: false, reason: "amount_mismatch" as const };
   }
@@ -226,6 +238,35 @@ export async function applyMercadoPagoPaymentUpdate(paymentId: string, context: 
   }
 
   return { updated: true, orderNumber: updated.publicOrderNumber, paymentStatus: updated.paymentStatus, orderStatus: updated.status };
+}
+
+export async function reconcileMercadoPagoReturn(
+  publicOrderNumber: string,
+  paymentId: string,
+  context: WebhookContext = {},
+) {
+  const orderNumber = sanitizeText(publicOrderNumber, 32);
+  const normalizedPaymentId = normalizeMercadoPagoPaymentId(paymentId);
+  if (!orderNumber) return { updated: false, reason: "invalid_order_number" as const };
+  if (!normalizedPaymentId) return { updated: false, reason: "invalid_payment_id" as const };
+
+  const order = await db.order.findUnique({
+    where: { publicOrderNumber: orderNumber },
+    select: {
+      externalReference: true,
+      paymentStatus: true,
+      mercadoPagoPaymentId: true,
+    },
+  });
+  if (!order) return { updated: false, reason: "order_not_found" as const };
+  if (order.paymentStatus === "APPROVED" && order.mercadoPagoPaymentId) {
+    return { updated: false, reason: "already_approved" as const };
+  }
+
+  return applyMercadoPagoPaymentUpdate(normalizedPaymentId, {
+    ...context,
+    expectedExternalReference: order.externalReference,
+  });
 }
 
 function validateOfferForCheckout(offer: OfferForCheckout | null, variantId: string | null | undefined):
@@ -450,6 +491,11 @@ function approvedDate(payment: MercadoPagoPayment) {
 
 function normalizeQuantity(value: number) {
   return Number.isInteger(value) && value > 0 && value <= MAX_CHECKOUT_QUANTITY ? value : null;
+}
+
+function normalizeMercadoPagoPaymentId(value: string) {
+  const cleaned = value.trim();
+  return /^\d{1,32}$/.test(cleaned) ? cleaned : null;
 }
 
 function roundMoney(value: number) {

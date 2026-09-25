@@ -23,6 +23,7 @@ import {
   applyMercadoPagoPaymentUpdate,
   createMercadoPagoCheckout,
   getPublicOrder,
+  reconcileMercadoPagoReturn,
 } from "@/lib/orders";
 import { verifyMercadoPagoWebhookSignature } from "@/lib/mercado-pago";
 import type { MercadoPagoPreferenceInput } from "@/lib/mercado-pago";
@@ -312,6 +313,40 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
     expect(mocks.db.order.update).not.toHaveBeenCalled();
   });
 
+  it("payment_id invalido nao consulta a API do Mercado Pago", async () => {
+    const getPayment = vi.fn();
+
+    const result = await applyMercadoPagoPaymentUpdate("payment-not-a-number", { getPayment });
+
+    expect(result).toEqual({ updated: false, reason: "invalid_payment_id" });
+    expect(getPayment).not.toHaveBeenCalled();
+    expect(mocks.db.order.update).not.toHaveBeenCalled();
+  });
+
+  it("resposta da API com outro payment_id nao atualiza Order", async () => {
+    const result = await applyMercadoPagoPaymentUpdate("123", {
+      getPayment: async () => paymentFixture({ id: 456 }),
+    });
+
+    expect(result).toEqual({ updated: false, reason: "payment_id_mismatch" });
+    expect(mocks.db.order.update).not.toHaveBeenCalled();
+  });
+
+  it("fallback do retorno vincula payment_id ao external_reference do pedido", async () => {
+    mocks.db.order.findUnique.mockResolvedValueOnce({
+      externalReference: "NOMA-BRORDER0001",
+      paymentStatus: "PENDING",
+      mercadoPagoPaymentId: null,
+    });
+
+    const result = await reconcileMercadoPagoReturn("BRORDER0001", "123", {
+      getPayment: async () => paymentFixture({ external_reference: "NOMA-BROTHERORDER" }),
+    });
+
+    expect(result).toEqual({ updated: false, reason: "external_reference_mismatch" });
+    expect(mocks.db.order.update).not.toHaveBeenCalled();
+  });
+
   it("success URL falsa nao marca pedido como pago", async () => {
     mocks.db.order.findUnique.mockResolvedValue(orderFixture({ paymentStatus: "PENDING", status: "PENDING_PAYMENT" }));
 
@@ -330,6 +365,20 @@ describe("Mercado Pago Checkout Pro NOMA", () => {
     expect(result).toMatchObject({ updated: true, paymentStatus: "APPROVED", orderStatus: "PAID" });
     expect(mocks.db.order.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ mercadoPagoPaymentId: "123", paymentStatus: "APPROVED", status: "PAID", paidAt: expect.any(Date) }),
+    }));
+  });
+
+  it("pagamento pending mantem pedido pendente usando o status real da API", async () => {
+    mocks.db.order.findUnique.mockResolvedValue(orderFixture({ paymentStatus: "PENDING" }));
+    mocks.db.order.update.mockImplementation(async ({ data }) => ({ ...orderFixture(), ...data }));
+
+    const result = await applyMercadoPagoPaymentUpdate("123", {
+      getPayment: async () => paymentFixture({ status: "pending", date_approved: "" }),
+    });
+
+    expect(result).toMatchObject({ updated: true, paymentStatus: "PENDING", orderStatus: "PENDING_PAYMENT" });
+    expect(mocks.db.order.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ mercadoPagoPaymentId: "123", paymentStatus: "PENDING", status: "PENDING_PAYMENT", paidAt: null }),
     }));
   });
 });
