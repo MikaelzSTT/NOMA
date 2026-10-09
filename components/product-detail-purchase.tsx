@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { Clock3, Truck } from "lucide-react";
+import { sendGoogleAdsLeadConversion } from "@/components/analytics/google-tracking";
 import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
 import { ProductVariantSelector } from "@/components/product-variant-selector";
 import { Rating } from "@/components/rating";
-import { AssistedPurchaseModal } from "@/components/assisted-purchase-modal";
 import { requiresAssistedPurchase as priceRequiresAssistedPurchase } from "@/lib/assisted-purchase-policy";
 import type { CatalogProductColorMaterialOption, CatalogProductVariant } from "@/lib/catalog";
 import type { Market } from "@/lib/market";
@@ -62,7 +61,6 @@ export function ProductDetailPurchase({
   fallback,
   market,
 }: ProductDetailPurchaseProps) {
-  const router = useRouter();
   const defaultVariant = useMemo(() => variants.find((variant) => variant.isDefault && variantIsSelectable(variant)) ?? variants.find(variantIsSelectable) ?? variants.find((variant) => variant.isDefault) ?? variants[0], [variants]);
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant);
   const [variantImageSelected, setVariantImageSelected] = useState(false);
@@ -75,7 +73,6 @@ export function ProductDetailPurchase({
   const [shippingMessage, setShippingMessage] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [assistedMessage, setAssistedMessage] = useState<string | null>(null);
-  const [isAssistedModalOpen, setIsAssistedModalOpen] = useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
   const selectedVariantId = selectedVariant?.id ?? null;
   const selectedPrice = selectedVariant?.salePrice ?? fallback.sellingPrice ?? 0;
@@ -187,7 +184,7 @@ export function ProductDetailPurchase({
         {market === "US" ? (
           <button disabled className={styles.buyButton}>Available soon</button>
         ) : requiresAssistedPurchase ? (
-          <button className={styles.buyButton} type="button" onClick={handleOpenAssistedPurchase}>
+          <button className={styles.buyButton} type="button" onClick={handleAssistedPurchase}>
             Solicitar atendimento de compra
           </button>
         ) : assistedMessage ? (
@@ -212,21 +209,6 @@ export function ProductDetailPurchase({
           <p className={styles.purchaseMessage}>{checkoutError ?? assistedMessage}</p>
         )}
       </div>
-      {requiresAssistedPurchase && (
-        <AssistedPurchaseModal
-          key={selectedVariantId ?? "offer"}
-          isOpen={isAssistedModalOpen}
-          onClose={() => setIsAssistedModalOpen(false)}
-          productId={productId}
-          offerId={offerId}
-          variantId={selectedVariantId}
-          productName={name}
-          variantLabel={selectedVariant?.label ?? null}
-          displayedPrice={selectedPrice}
-          currency={fallback.currency}
-          market={market}
-        />
-      )}
     </section>
   );
 
@@ -301,18 +283,16 @@ export function ProductDetailPurchase({
       productSlug,
       variantId: selectedVariantId,
     });
-    router.push("/br#contato");
-  }
-
-  function handleOpenAssistedPurchase() {
-    trackNomaPurchaseIntent({
-      eventType: "assisted_purchase_click",
-      market,
-      productId,
-      productSlug,
-      variantId: selectedVariantId,
-    });
-    setIsAssistedModalOpen(true);
+    try {
+      sendGoogleAdsLeadConversion(`whatsapp-${createIdempotencyKey()}`);
+    } finally {
+      // Open synchronously within the click so mobile browsers keep the user activation.
+      window.open(
+        "https://wa.me/5511993595887?text=Ol%C3%A1%2C%20vim%20pelo%20site%20da%20NOMA%20e%20gostaria%20de%20atendimento.",
+        "_blank",
+        "noopener,noreferrer",
+      );
+    }
   }
 
   function handleSelectVariant(variant: CatalogProductVariant) {
