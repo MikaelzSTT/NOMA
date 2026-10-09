@@ -960,6 +960,7 @@
   .variantChip { min-height: 2.8rem; }
   .shippingFormRow,
   .addressGrid { grid-template-columns: 1fr; }
+  .buyButton { margin-top: 1rem; }
   .contentBand { padding-block: 4.5rem; }
   .relatedGrid { grid-template-columns: 1fr; }
   .relatedHeading { align-items: start; flex-direction: column; }
