@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  sendGoogleAdsAssistedPurchaseConversions,
   sendGoogleAdsLeadConversion,
   sendGoogleAdsPurchaseConversion,
 } from "@/components/analytics/google-tracking";
@@ -10,7 +11,7 @@ describe("conversoes Google Ads", () => {
 
   beforeEach(() => {
     storage.clear();
-    gtag.mockClear();
+    gtag.mockReset();
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {
@@ -55,6 +56,81 @@ describe("conversoes Google Ads", () => {
       send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD",
       transaction_id: "request-1",
     });
+    expect(conversionCalls()).toHaveLength(1);
+  });
+
+  it("envia uma conversao por conta para o mesmo clique e configura cada destino uma vez", () => {
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(true);
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(false);
+
+    expect(gtag.mock.calls.filter(([command]) => command === "config")).toEqual([
+      ["config", "AW-17990986153"],
+      ["config", "AW-4154226288"],
+    ]);
+    expect(conversionCalls()).toEqual([
+      ["event", "conversion", { send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD", transaction_id: "whatsapp-1" }],
+      ["event", "conversion", { send_to: "AW-4154226288/_2fecLKWzP4cEKSxi8YB", transaction_id: "whatsapp-1" }],
+    ]);
+  });
+
+  it("deduplica por destino mesmo se a conversao antiga ja foi enviada", () => {
+    sendGoogleAdsLeadConversion("whatsapp-1");
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(true);
+    expect(conversionCalls()).toHaveLength(2);
+  });
+
+  it("preserva a deduplicacao apos recarregar a pagina", () => {
+    sendGoogleAdsAssistedPurchaseConversions("whatsapp-1");
+    delete window.__NOMA_GOOGLE_ADS_CONVERSIONS__;
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(false);
+    expect(conversionCalls()).toHaveLength(2);
+  });
+
+  it("deduplica em memoria quando o armazenamento esta bloqueado", () => {
+    window.localStorage.getItem = () => { throw new Error("Storage denied"); };
+    window.localStorage.setItem = () => { throw new Error("Storage denied"); };
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(true);
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(false);
+    expect(conversionCalls()).toHaveLength(2);
+  });
+
+  it("tenta o segundo destino se o primeiro falhar e permite repetir apenas o que falhou", () => {
+    gtag.mockImplementation((command, event, params) => {
+      if (command === "event" && event === "conversion" && params.send_to.startsWith("AW-17990986153/")) {
+        throw new Error("Tag failed");
+      }
+    });
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(true);
+    expect(conversionCalls()).toHaveLength(2);
+    gtag.mockReset();
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(true);
+    expect(conversionCalls()).toEqual([
+      ["event", "conversion", { send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD", transaction_id: "whatsapp-1" }],
+    ]);
+  });
+
+  it("preserva a fila de consentimento e enfileira os dois destinos antes do carregamento do script", () => {
+    delete window.gtag;
+    const consent = ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }];
+    window.dataLayer!.push(consent);
+    sendGoogleAdsAssistedPurchaseConversions("whatsapp-1");
+
+    expect(window.dataLayer![0]).toBe(consent);
+    const commands = window.dataLayer!.slice(1).map((entry) => Array.from(entry as ArrayLike<unknown>));
+    expect(commands.map(([command, event]) => [command, event])).toEqual([
+      ["js", expect.any(Date)],
+      ["config", "AW-17990986153"],
+      ["event", "conversion"],
+      ["config", "AW-4154226288"],
+      ["event", "conversion"],
+    ]);
+    expect(window.dataLayer!.slice(1).every((entry) => Object.prototype.toString.call(entry) === "[object Arguments]")).toBe(true);
+  });
+
+  it("nao envia conversoes no servidor", () => {
+    Reflect.deleteProperty(globalThis, "window");
+    expect(sendGoogleAdsAssistedPurchaseConversions("whatsapp-1")).toBe(false);
+    expect(gtag).not.toHaveBeenCalled();
   });
 
   it("cria o gtag com o formato arguments esperado pelo script do Google", () => {
@@ -85,4 +161,8 @@ describe("conversoes Google Ads", () => {
       },
     ]);
   });
+
+  function conversionCalls() {
+    return gtag.mock.calls.filter(([command, event]) => command === "event" && event === "conversion");
+  }
 });

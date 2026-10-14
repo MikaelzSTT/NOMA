@@ -7,7 +7,8 @@ import {
   buildGoogleAdsLeadConversionParams,
   buildGoogleAdsPurchaseConversionParams,
   buildTrafficParams,
-  GOOGLE_ADS_ID,
+  GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET,
+  GOOGLE_ADS_LEAD_CONVERSION_TARGET,
   googleAdsConversionTarget,
   googleTagLoaderId,
   hasGoogleTrackingConfig,
@@ -148,6 +149,19 @@ export function sendGoogleAdsLeadConversion(transactionId: string) {
   return sendGoogleAdsConversion(buildGoogleAdsLeadConversionParams(transactionId));
 }
 
+export function sendGoogleAdsAssistedPurchaseConversions(transactionId: string) {
+  const targets = [GOOGLE_ADS_LEAD_CONVERSION_TARGET, GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET] as const;
+  const results = targets.map((send_to) => {
+    try {
+      return sendGoogleAdsConversion({ send_to, transaction_id: transactionId });
+    } catch {
+      // A failure in one destination must not prevent the other from being attempted.
+      return false;
+    }
+  });
+  return results.some(Boolean);
+}
+
 function GooglePageView({ config }: { config: GoogleTrackingConfig }) {
   return <GoogleEvent name="page_view" config={config} />;
 }
@@ -230,9 +244,11 @@ function configureGoogleTags(config: GoogleTrackingConfig) {
     window.gtag("config", config.gaMeasurementId, { send_page_view: false });
     configuredIds.push(config.gaMeasurementId);
   }
-  if (config.googleAdsId && !configuredIds.includes(config.googleAdsId)) {
-    window.gtag("config", config.googleAdsId);
-    configuredIds.push(config.googleAdsId);
+  for (const adsId of [config.googleAdsId, ...(config.additionalGoogleAdsIds ?? [])]) {
+    if (adsId && !configuredIds.includes(adsId)) {
+      window.gtag("config", adsId);
+      configuredIds.push(adsId);
+    }
   }
 }
 
@@ -241,7 +257,7 @@ function sendGoogleAdsConversion(
 ) {
   if (typeof window === "undefined") return false;
 
-  configureGoogleTags({ googleAdsId: GOOGLE_ADS_ID });
+  configureGoogleTags({ googleAdsId: params.send_to.split("/")[0] });
   if (!window.gtag) return false;
 
   const dedupeKey = `${params.send_to}:${params.transaction_id}`;

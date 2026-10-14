@@ -4,6 +4,8 @@ import {
   buildGoogleAdsPurchaseConversionParams,
   buildTrafficParams,
   GOOGLE_ADS_ID,
+  GOOGLE_ADS_ATTENDANCE_ID,
+  GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET,
   getGoogleTrackingConfig,
   googleAdsConversionTarget,
   googleTagLoaderId,
@@ -18,6 +20,9 @@ describe("tracking Google", () => {
     try {
       expect(GOOGLE_ADS_ID).toBe("AW-17990986153");
       expect(getGoogleTrackingConfig().googleAdsId).toBe(GOOGLE_ADS_ID);
+      expect(GOOGLE_ADS_ATTENDANCE_ID).toBe("AW-4154226288");
+      expect(GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET).toBe("AW-4154226288/_2fecLKWzP4cEKSxi8YB");
+      expect(getGoogleTrackingConfig().additionalGoogleAdsIds).toEqual([GOOGLE_ADS_ATTENDANCE_ID]);
     } finally {
       if (configuredId === undefined) {
         delete process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
@@ -31,6 +36,7 @@ describe("tracking Google", () => {
     expect(googleTagLoaderId({
       gaMeasurementId: "G-TEST",
       googleAdsId: GOOGLE_ADS_ID,
+      additionalGoogleAdsIds: [GOOGLE_ADS_ATTENDANCE_ID],
     })).toBe("AW-17990986153");
   });
 

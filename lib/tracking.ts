@@ -3,10 +3,13 @@ import type { Market } from "@/lib/market";
 export const GOOGLE_ADS_ID = "AW-17990986153";
 export const GOOGLE_ADS_PURCHASE_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/BslfCL7KjIEdEKnT4oJD`;
 export const GOOGLE_ADS_LEAD_CONVERSION_TARGET = `${GOOGLE_ADS_ID}/8MvVCLnLjIEdEKnT4oJD`;
+export const GOOGLE_ADS_ATTENDANCE_ID = "AW-4154226288";
+export const GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET = `${GOOGLE_ADS_ATTENDANCE_ID}/_2fecLKWzP4cEKSxi8YB`;
 
 export type GoogleTrackingConfig = {
   gaMeasurementId?: string;
   googleAdsId?: string;
+  additionalGoogleAdsIds?: string[];
   googleAdsConversionLabel?: string;
 };
 
@@ -31,7 +34,7 @@ export type GoogleAdsPurchaseConversionParams = {
 };
 
 export type GoogleAdsLeadConversionParams = {
-  send_to: typeof GOOGLE_ADS_LEAD_CONVERSION_TARGET;
+  send_to: typeof GOOGLE_ADS_LEAD_CONVERSION_TARGET | typeof GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET;
   transaction_id: string;
 };
 
@@ -48,6 +51,7 @@ export function getGoogleTrackingConfig(): GoogleTrackingConfig {
   return {
     gaMeasurementId: cleanEnvValue(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID),
     googleAdsId: GOOGLE_ADS_ID,
+    additionalGoogleAdsIds: [GOOGLE_ADS_ATTENDANCE_ID],
     googleAdsConversionLabel: cleanEnvValue(process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL),
   };
 }

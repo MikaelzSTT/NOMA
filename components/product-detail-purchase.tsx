@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Clock3, Truck } from "lucide-react";
-import { sendGoogleAdsLeadConversion } from "@/components/analytics/google-tracking";
+import { sendGoogleAdsAssistedPurchaseConversions } from "@/components/analytics/google-tracking";
 import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
@@ -276,6 +276,13 @@ export function ProductDetailPurchase({
   }
 
   function handleAssistedPurchase() {
+    // Open synchronously before tracking so tags cannot delay or block user activation.
+    window.open(
+      "https://wa.me/5511993595887?text=Ol%C3%A1%2C%20vim%20pelo%20site%20da%20NOMA%20e%20gostaria%20de%20atendimento.",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    sendGoogleAdsAssistedPurchaseConversions(`whatsapp-${createIdempotencyKey()}`);
     trackNomaPurchaseIntent({
       eventType: "assisted_purchase_click",
       market,
@@ -283,16 +290,6 @@ export function ProductDetailPurchase({
       productSlug,
       variantId: selectedVariantId,
     });
-    try {
-      sendGoogleAdsLeadConversion(`whatsapp-${createIdempotencyKey()}`);
-    } finally {
-      // Open synchronously within the click so mobile browsers keep the user activation.
-      window.open(
-        "https://wa.me/5511993595887?text=Ol%C3%A1%2C%20vim%20pelo%20site%20da%20NOMA%20e%20gostaria%20de%20atendimento.",
-        "_blank",
-        "noopener,noreferrer",
-      );
-    }
   }
 
   function handleSelectVariant(variant: CatalogProductVariant) {
