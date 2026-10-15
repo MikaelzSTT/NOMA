@@ -5,7 +5,9 @@ O clique em **Solicitar atendimento de compra** na página de produto abre o Wha
 | Destino | `send_to` |
 | --- | --- |
 | Conversão existente | `AW-17990986153/8MvVCLnLjIEdEKnT4oJD` |
-| solicitação de atendimento noma | `AW-4154226288/_2fecLKWzP4cEKSxi8YB` |
+| solicitação de atendimento noma | `AW-415422628/_2feCLKWzP4cEKSxi8YB` |
+
+O destino de **solicitação de atendimento noma** corresponde ao snippet oficial fornecido pelo responsável pela conta: ID `AW-415422628` e rótulo `_2feCLKWzP4cEKSxi8YB`, com `C` maiúsculo após `_2fe`. O destino existente em `AW-17990986153` permanece preservado até a confirmação de seus vínculos e necessidade.
 
 Cada clique recebe um `transaction_id` aleatório, compartilhado pelos dois destinos. A deduplicação usa destino + identificador, em memória e no armazenamento já utilizado pela aplicação. Falhas de armazenamento não impedem o envio. Falhas de uma tag não impedem a tentativa na outra nem a abertura do WhatsApp.
 
@@ -16,7 +18,7 @@ A CSP permanece inalterada. A integração reutiliza `window.gtag` e `dataLayer`
 ## Validação após publicar
 
 1. Abra o [Tag Assistant](https://tagassistant.google.com/) e conecte `https://nomarooms.com`. Alternativamente, inicie a solução de problemas da ação de conversão no Google Ads, conforme a [documentação oficial](https://support.google.com/google-ads/answer/10989978?hl=pt-BR).
-2. Navegue até um produto com **Solicitar atendimento de compra**. Confira os destinos `AW-17990986153` e `AW-4154226288`. Recarregue e navegue sem clicar: não deve haver eventos `conversion` com os dois rótulos de atendimento.
+2. Navegue até um produto com **Solicitar atendimento de compra**. Confira os destinos `AW-17990986153` e `AW-415422628`. Recarregue e navegue sem clicar: não deve haver eventos `conversion` com os dois rótulos de atendimento.
 3. Clique uma vez. O WhatsApp deve abrir imediatamente em nova aba; mantenha a aba do site aberta e volte ao Tag Assistant.
 4. Confira um evento de conversão para cada par ID/rótulo da tabela, com o mesmo `transaction_id`. Inspecione os eventos/payloads, pois um único evento pode gerar múltiplas requisições de rede do Google.
 5. Clique novamente: devem aparecer mais dois eventos, com um novo identificador. Repita no botão de atendimento apresentado quando o frete exige assistência.
@@ -24,7 +26,7 @@ A CSP permanece inalterada. A integração reutiliza `window.gtag` e `dataLayer`
 
 ## Conferência na conta Google Ads
 
-O código não cria nem altera ações na conta. Confirme que **solicitação de atendimento noma** corresponde exatamente a `AW-4154226288/_2fecLKWzP4cEKSxi8YB`, que usa o evento de clique implementado e que não possui outro disparador para o mesmo clique ou para carregamento de página. Confira também se a ação participa das metas das campanhas desejadas. Se a ação já estiver configurada corretamente, não é necessária outra tag no site; resta publicar e validar o recebimento nas duas contas.
+O código não cria nem altera ações na conta. O destino confirmado para **solicitação de atendimento noma** é `AW-415422628/_2feCLKWzP4cEKSxi8YB`. Confira se a ação usa o evento de clique implementado e se não possui outro disparador externo para o mesmo clique ou para carregamento de página. Confira também se a ação participa das metas das campanhas desejadas. A validação do recebimento deve observar atendimentos legítimos; cliques de teste devem usar `gtag` simulado, sem enviar conversões reais.
 
 ## Verificações locais
 

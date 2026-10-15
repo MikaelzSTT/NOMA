@@ -66,7 +66,7 @@ describe("clique de atendimento na pagina de produto", () => {
     expect(gtag.mock.calls.filter(([command]) => command === "config")).toEqual([
       ["config", "G-TEST", { send_page_view: false }],
       ["config", "AW-17990986153"],
-      ["config", "AW-4154226288"],
+      ["config", "AW-415422628"],
     ]);
     expect(conversions()).toHaveLength(0);
     expect(open).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe("clique de atendimento na pagina de produto", () => {
     expect(transactionId).toMatch(/^whatsapp-.+/);
     expect(conversions()).toEqual([
       ["event", "conversion", { send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD", transaction_id: transactionId }],
-      ["event", "conversion", { send_to: "AW-4154226288/_2fecLKWzP4cEKSxi8YB", transaction_id: transactionId }],
+      ["event", "conversion", { send_to: "AW-415422628/_2feCLKWzP4cEKSxi8YB", transaction_id: transactionId }],
     ]);
     const firstConversionIndex = gtag.mock.calls.findIndex(([command, event]) => command === "event" && event === "conversion");
     expect(open.mock.invocationCallOrder[0]).toBeLessThan(gtag.mock.invocationCallOrder[firstConversionIndex]);

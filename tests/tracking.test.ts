@@ -20,8 +20,8 @@ describe("tracking Google", () => {
     try {
       expect(GOOGLE_ADS_ID).toBe("AW-17990986153");
       expect(getGoogleTrackingConfig().googleAdsId).toBe(GOOGLE_ADS_ID);
-      expect(GOOGLE_ADS_ATTENDANCE_ID).toBe("AW-4154226288");
-      expect(GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET).toBe("AW-4154226288/_2fecLKWzP4cEKSxi8YB");
+      expect(GOOGLE_ADS_ATTENDANCE_ID).toBe("AW-415422628");
+      expect(GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET).toBe("AW-415422628/_2feCLKWzP4cEKSxi8YB");
       expect(getGoogleTrackingConfig().additionalGoogleAdsIds).toEqual([GOOGLE_ADS_ATTENDANCE_ID]);
     } finally {
       if (configuredId === undefined) {

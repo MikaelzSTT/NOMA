@@ -65,11 +65,11 @@ describe("conversoes Google Ads", () => {
 
     expect(gtag.mock.calls.filter(([command]) => command === "config")).toEqual([
       ["config", "AW-17990986153"],
-      ["config", "AW-4154226288"],
+      ["config", "AW-415422628"],
     ]);
     expect(conversionCalls()).toEqual([
       ["event", "conversion", { send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD", transaction_id: "whatsapp-1" }],
-      ["event", "conversion", { send_to: "AW-4154226288/_2fecLKWzP4cEKSxi8YB", transaction_id: "whatsapp-1" }],
+      ["event", "conversion", { send_to: "AW-415422628/_2feCLKWzP4cEKSxi8YB", transaction_id: "whatsapp-1" }],
     ]);
   });
 
@@ -121,7 +121,7 @@ describe("conversoes Google Ads", () => {
       ["js", expect.any(Date)],
       ["config", "AW-17990986153"],
       ["event", "conversion"],
-      ["config", "AW-4154226288"],
+      ["config", "AW-415422628"],
       ["event", "conversion"],
     ]);
     expect(window.dataLayer!.slice(1).every((entry) => Object.prototype.toString.call(entry) === "[object Arguments]")).toBe(true);
