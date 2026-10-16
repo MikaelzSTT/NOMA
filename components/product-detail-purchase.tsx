@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Clock3, Truck } from "lucide-react";
-import { sendGoogleAdsAssistedPurchaseConversions } from "@/components/analytics/google-tracking";
+import { trackNomaWhatsAppClick } from "@/components/analytics/google-tracking";
 import { trackNomaPurchaseIntent } from "@/components/analytics/noma-intent-tracking";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductColorMaterialSelector } from "@/components/product-color-material-selector";
@@ -282,7 +282,7 @@ export function ProductDetailPurchase({
       "_blank",
       "noopener,noreferrer",
     );
-    sendGoogleAdsAssistedPurchaseConversions(`whatsapp-${createIdempotencyKey()}`);
+    trackNomaWhatsAppClick(`whatsapp-${createIdempotencyKey()}`);
     trackNomaPurchaseIntent({
       eventType: "assisted_purchase_click",
       market,

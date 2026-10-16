@@ -69,18 +69,21 @@ describe("clique de atendimento na pagina de produto", () => {
       ["config", "AW-415422628"],
     ]);
     expect(conversions()).toHaveLength(0);
+    expect(whatsappEvents()).toHaveLength(0);
     expect(open).not.toHaveBeenCalled();
     expect(gtag.mock.calls.some(([command]) => command === "consent")).toBe(false);
   });
 
-  it("abre WhatsApp no proprio clique antes das tags e envia exatamente uma conversao por conta", () => {
+  it("abre WhatsApp antes do evento GTM e emite um evento por clique sem conversoes diretas", () => {
     renderProduct();
+    const push = vi.spyOn(window.dataLayer!, "push");
     const button = attendanceButton();
     act(() => {
       button.click();
       // Assert before yielding to promises, timers or tag callbacks.
       expect(open).toHaveBeenCalledTimes(1);
-      expect(conversions()).toHaveLength(2);
+      expect(whatsappEvents()).toHaveLength(1);
+      expect(conversions()).toHaveLength(0);
     });
 
     expect(open).toHaveBeenCalledWith(
@@ -88,39 +91,51 @@ describe("clique de atendimento na pagina de produto", () => {
       "_blank",
       "noopener,noreferrer",
     );
-    const transactionId = conversions()[0][2].transaction_id;
+    const transactionId = whatsappEvents()[0].transaction_id;
     expect(transactionId).toMatch(/^whatsapp-.+/);
-    expect(conversions()).toEqual([
-      ["event", "conversion", { send_to: "AW-17990986153/8MvVCLnLjIEdEKnT4oJD", transaction_id: transactionId }],
-      ["event", "conversion", { send_to: "AW-415422628/_2feCLKWzP4cEKSxi8YB", transaction_id: transactionId }],
-    ]);
-    const firstConversionIndex = gtag.mock.calls.findIndex(([command, event]) => command === "event" && event === "conversion");
-    expect(open.mock.invocationCallOrder[0]).toBeLessThan(gtag.mock.invocationCallOrder[firstConversionIndex]);
+    expect(whatsappEvents()).toEqual([{ event: "noma_whatsapp_click", transaction_id: transactionId }]);
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(push.mock.invocationCallOrder[0]);
     expect(mocks.trackIntent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "assisted_purchase_click" }));
 
     act(() => button.click());
     expect(open).toHaveBeenCalledTimes(2);
-    expect(conversions()).toHaveLength(4);
-    expect(conversions()[2][2].transaction_id).not.toBe(transactionId);
-    expect(conversions()[2][2].transaction_id).toBe(conversions()[3][2].transaction_id);
+    expect(conversions()).toHaveLength(0);
+    expect(whatsappEvents()).toHaveLength(2);
+    expect(whatsappEvents()[1].transaction_id).not.toBe(transactionId);
   });
 
-  it("mantem WhatsApp e tracking interno quando as tags falham", () => {
+  it("mantem WhatsApp e tracking interno quando o dataLayer falha", () => {
     renderProduct();
-    gtag.mockImplementation(() => { throw new Error("Tag unavailable"); });
+    vi.spyOn(window.dataLayer!, "push").mockImplementation(() => { throw new Error("Tag unavailable"); });
     act(() => attendanceButton().click());
     expect(open).toHaveBeenCalledTimes(1);
-    expect(conversions()).toHaveLength(2);
+    expect(conversions()).toHaveLength(0);
     expect(mocks.trackIntent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "assisted_purchase_click" }));
   });
 
-  it("enfileira as conversoes se o script ainda nao carregou", () => {
-    delete window.gtag;
+  it("enfileira o evento preservando consentimento sem depender de gtag ou GTM carregados", () => {
     renderProduct();
+    delete window.gtag;
+    const consent = { event: "consent_initialized" };
+    window.dataLayer!.push(consent);
+    const queue = window.dataLayer;
     act(() => attendanceButton().click());
     expect(open).toHaveBeenCalledTimes(1);
-    const commands = window.dataLayer!.map((entry) => Array.from(entry as ArrayLike<unknown>));
-    expect(commands.filter(([command, event]) => command === "event" && event === "conversion")).toHaveLength(2);
+    expect(window.dataLayer).toBe(queue);
+    expect(window.dataLayer![0]).toBe(consent);
+    expect(whatsappEvents()).toHaveLength(1);
+    expect(window.gtag).toBeUndefined();
+    expect(conversions()).toHaveLength(0);
+  });
+
+  it("cria a fila se o clique acontecer antes da inicializacao das tags", () => {
+    renderProduct();
+    delete window.gtag;
+    delete window.dataLayer;
+    act(() => attendanceButton().click());
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(whatsappEvents()).toHaveLength(1);
+    expect(conversions()).toHaveLength(0);
   });
 
   it("nao converte ao exibir um produto de checkout ou clicar em seu botao desabilitado", () => {
@@ -129,10 +144,11 @@ describe("clique de atendimento na pagina de produto", () => {
     expect(button.disabled).toBe(true);
     act(() => button.click());
     expect(conversions()).toHaveLength(0);
+    expect(whatsappEvents()).toHaveLength(0);
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("tambem envia as duas conversoes no atendimento oferecido apos a cotacao de frete", async () => {
+  it("tambem emite apenas o evento GTM no atendimento oferecido apos a cotacao de frete", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: async () => ({ type: "assisted_purchase", message: "Solicite atendimento para esta entrega." }),
     }));
@@ -141,9 +157,11 @@ describe("clique de atendimento na pagina de produto", () => {
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(conversions()).toHaveLength(0);
+    expect(whatsappEvents()).toHaveLength(0);
     act(() => attendanceButton().click());
     expect(open).toHaveBeenCalledTimes(1);
-    expect(conversions()).toHaveLength(2);
+    expect(conversions()).toHaveLength(0);
+    expect(whatsappEvents()).toHaveLength(1);
   });
 
   function renderProduct(overrides: Partial<ComponentProps<typeof ProductDetailPurchase>> = {}) {
@@ -159,6 +177,12 @@ describe("clique de atendimento na pagina de produto", () => {
 
   function conversions() {
     return gtag.mock.calls.filter(([command, event]) => command === "event" && event === "conversion");
+  }
+
+  function whatsappEvents() {
+    return (window.dataLayer ?? []).filter((entry) => (
+      (entry as { event?: string })?.event === "noma_whatsapp_click"
+    )) as Array<{ event: "noma_whatsapp_click"; transaction_id: string }>;
   }
 });
 

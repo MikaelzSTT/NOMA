@@ -149,6 +149,20 @@ export function sendGoogleAdsLeadConversion(transactionId: string) {
   return sendGoogleAdsConversion(buildGoogleAdsLeadConversionParams(transactionId));
 }
 
+export function trackNomaWhatsAppClick(transactionId: string) {
+  if (typeof window === "undefined") return false;
+
+  try {
+    // Keep queued consent/events and let GTM own the WhatsApp conversion.
+    window.dataLayer ??= [];
+    window.dataLayer.push({ event: "noma_whatsapp_click", transaction_id: transactionId });
+    return true;
+  } catch {
+    // Tracking failures must not interrupt WhatsApp or internal analytics.
+    return false;
+  }
+}
+
 export function sendGoogleAdsAssistedPurchaseConversions(transactionId: string) {
   const targets = [GOOGLE_ADS_LEAD_CONVERSION_TARGET, GOOGLE_ADS_ATTENDANCE_CONVERSION_TARGET] as const;
   const results = targets.map((send_to) => {

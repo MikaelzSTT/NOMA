@@ -1,40 +1,51 @@
-# Google Ads — atendimento NOMA
+# Atendimento NOMA — migração de WhatsApp para GTM
 
-O clique em **Solicitar atendimento de compra** na página de produto abre o WhatsApp de forma síncrona em nova aba e envia dois eventos `conversion` pelo `gtag` existente:
+**Preparada localmente; publicação bloqueada pela configuração remota do GTM.** Não enviar esta alteração para `main` antes de cumprir as condições abaixo. A loja em produção continua com seu código atual; não houve commit, push ou deploy desta migração.
 
-| Destino | `send_to` |
-| --- | --- |
-| Conversão existente | `AW-17990986153/8MvVCLnLjIEdEKnT4oJD` |
-| solicitação de atendimento noma | `AW-415422628/_2feCLKWzP4cEKSxi8YB` |
+## Auditoria dos disparos diretos
 
-O destino de **solicitação de atendimento noma** corresponde ao snippet oficial fornecido pelo responsável pela conta: ID `AW-415422628` e rótulo `_2feCLKWzP4cEKSxi8YB`, com `C` maiúsculo após `_2fe`. O destino existente em `AW-17990986153` permanece preservado até a confirmação de seus vínculos e necessidade.
+| Origem | Antes desta migração | Alteração preparada |
+| --- | --- | --- |
+| `ProductDetailPurchase.handleAssistedPurchase`, incluindo atendimento após cotação de frete | WhatsApp + `AW-17990986153/8MvVCLnLjIEdEKnT4oJD` + `AW-415422628/_2feCLKWzP4cEKSxi8YB` | WhatsApp + um evento `noma_whatsapp_click`; sem conversão direta |
+| Formulário `AssistedPurchaseModal`, após resposta de sucesso da API | `AW-17990986153/8MvVCLnLjIEdEKnT4oJD` | Preservado: formulário não é clique de WhatsApp |
+| Compra aprovada, `GoogleAdsPurchaseConversion` | `AW-17990986153/BslfCL7KjIEdEKnT4oJD`, valor, moeda e ID do pedido | Preservado |
+| Landing de manutenção | Conversão opcional definida por `NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL` | Preservada; evitar essa página na validação |
 
-Cada clique recebe um `transaction_id` aleatório, compartilhado pelos dois destinos. A deduplicação usa destino + identificador, em memória e no armazenamento já utilizado pela aplicação. Falhas de armazenamento não impedem o envio. Falhas de uma tag não impedem a tentativa na outra nem a abertura do WhatsApp.
+O helper `sendGoogleAdsAssistedPurchaseConversions` e seus testes permanecem disponíveis, mas deixam de ser chamados pelo botão de WhatsApp. Nenhuma biblioteca, tag base, função de compra/formulário ou evento interno foi removido. O `gtag.js` existente, as configurações base `AW-17990986153`/`AW-415422628`, a deduplicação de compras, o checkout e o Mercado Pago permanecem intactos.
 
-O segundo destino é configurado no mesmo `gtag.js`, sem outro loader ou variável de ambiente. O roteamento explícito segue a [documentação do Google](https://developers.google.com/tag-platform/gtagjs/routing). Compra, formulário de atendimento e a conversão opcional da landing de teste mantêm seus destinos existentes. A montagem e a navegação na página de produto não disparam as conversões de atendimento.
+## Contrato do evento
 
-A CSP permanece inalterada. A integração reutiliza `window.gtag` e `dataLayer` e não adiciona nem altera comandos `consent`. O repositório não contém uma implementação de Consent Mode/CMP; se configurada externamente, deve ser conferida na validação em produção. O consentimento do formulário de atendimento permanece separado e inalterado.
+O clique abre `https://wa.me/5511993595887?...` imediatamente, na mesma execução síncrona, antes de qualquer tracking. Depois, `trackNomaWhatsAppClick` acrescenta à fila existente:
 
-## Validação após publicar
-
-1. Abra o [Tag Assistant](https://tagassistant.google.com/) e conecte `https://nomarooms.com`. Alternativamente, inicie a solução de problemas da ação de conversão no Google Ads, conforme a [documentação oficial](https://support.google.com/google-ads/answer/10989978?hl=pt-BR).
-2. Navegue até um produto com **Solicitar atendimento de compra**. Confira os destinos `AW-17990986153` e `AW-415422628`. Recarregue e navegue sem clicar: não deve haver eventos `conversion` com os dois rótulos de atendimento.
-3. Clique uma vez. O WhatsApp deve abrir imediatamente em nova aba; mantenha a aba do site aberta e volte ao Tag Assistant.
-4. Confira um evento de conversão para cada par ID/rótulo da tabela, com o mesmo `transaction_id`. Inspecione os eventos/payloads, pois um único evento pode gerar múltiplas requisições de rede do Google.
-5. Clique novamente: devem aparecer mais dois eventos, com um novo identificador. Repita no botão de atendimento apresentado quando o frete exige assistência.
-6. Confira a aba de consentimento conforme a configuração efetiva do site e a ausência de erros de CSP no console. Verifique também o fluxo normal de checkout, cuja conversão de compra permanece `AW-17990986153/BslfCL7KjIEdEKnT4oJD`.
-
-## Conferência na conta Google Ads
-
-O código não cria nem altera ações na conta. O destino confirmado para **solicitação de atendimento noma** é `AW-415422628/_2feCLKWzP4cEKSxi8YB`. Confira se a ação usa o evento de clique implementado e se não possui outro disparador externo para o mesmo clique ou para carregamento de página. Confira também se a ação participa das metas das campanhas desejadas. A validação do recebimento deve observar atendimentos legítimos; cliques de teste devem usar `gtag` simulado, sem enviar conversões reais.
-
-## Verificações locais
-
-```sh
-npm test
-npm run lint
-npm run typecheck
-npm run build
+```json
+{
+  "event": "noma_whatsapp_click",
+  "transaction_id": "whatsapp-<identificador aleatório por clique>"
+}
 ```
 
-Os testes de DOM usam `jsdom` somente como dependência de desenvolvimento. Eles verificam montagem/navegação, os dois caminhos do botão, abertura síncrona, falha das tags, fila antes do carregamento do script e ausência de conversão no botão de checkout desabilitado. Os testes de conversão também cobrem deduplicação por destino, consentimento enfileirado e preservação de compra/formulário. A recepção real no Google Ads requer a validação acima após o deploy.
+O evento não contém dados pessoais, preço de compra ou destino Ads. O GTM decide o destino. A fila é criada se necessário, sem sobrescrever consentimento ou eventos anteriores. Falhas em `dataLayer.push` não impedem o WhatsApp nem o evento interno `assisted_purchase_click`. Não há espera por callback do GTM, nem timeout que dispare a conversão direta como fallback, pois isso poderia duplicar envios.
+
+Montagem, navegação, cotação de frete e botão de checkout desabilitado não emitem o evento. Cada clique de atendimento emite uma vez, com um novo `transaction_id`. O evento interno `assisted_purchase_click` mantém sua lógica anterior, inclusive no retorno de checkout que oferece atendimento; ele não foi convertido em disparador Ads.
+
+## Ajustes obrigatórios no GTM antes de publicar o site
+
+No contêiner **NOMA `GTM-T8ZDJ45R`**, o responsável deve:
+
+1. Criar um acionador **Evento personalizado**, nome exato `noma_whatsapp_click`, sem expressão regular e sem seletores CSS.
+2. Configurar a tag nativa de acompanhamento de conversões do Google Ads para **ID `415422628` e rótulo `_2feCLKWzP4cEKSxi8YB`**. Associar somente o acionador acima e manter uma execução por evento.
+3. Criar uma variável de camada de dados, versão 2, chamada `transaction_id`, e usá-la no campo **ID da transação** dessa tag. Manter os requisitos de consentimento aplicáveis e confirmar a Google tag correspondente/Conversion Linker, evitando configurar novamente as bases já carregadas pelo site.
+4. Retirar do fluxo NOMA a conversão de clique `AW-17990986153/DhxuCLXKnp8dEKnT4oJD` baseada em `.product-detail_buyButton__AtJQl`. Ela é uma ação diferente, não um alias da ação oficial. Não mover o rótulo `_2fe...` para o ID `17990986153`.
+5. Resolver a tag remota `AW-17990986153/2TAmCIWkn58dEKnT4oJD`, atualmente disparada no DOM Ready quando o caminho contém `pedido`. Esse critério pode incluir pedidos pendentes/falhos e somar uma conversão à compra direta aprovada. A migração solicitada é apenas de WhatsApp; não ativar outra medição de compra sobre a integração existente.
+6. Confirmar, na conta Google Ads correta, que a ação **`AW-415422628/_2feCLKWzP4cEKSxi8YB`** está vinculada à campanha NOMA desejada e à sua meta de conversão. O JavaScript público do GTM não comprova esse vínculo. Nenhuma configuração da RBS Eletro deve ser alterada.
+7. **Publicar** a versão do contêiner. Salvar no workspace ou validar somente em Preview não é suficiente. Fornecer a versão publicada e a confirmação do vínculo com a campanha para liberar a publicação do site.
+
+A alteração no site deve entrar como uma unidade: instalação GTM preservada + evento novo + remoção dos dois disparos diretos do clique. Não publicar uma etapa intermediária com ambos os caminhos de conversão ou apenas com a remoção. Revalidar a versão pública do contêiner imediatamente antes do push/deploy.
+
+## Validação sem conversões reais de teste
+
+Os testes locais simulam `window.open`, `gtag` e falhas de tags, sem enviar conversões. Cobrem os dois caminhos do botão, ordem síncrona, um evento por clique, fila antes do carregamento, preservação do consentimento, falhas e ausência de eventos/conversões na montagem/navegação.
+
+Depois da liberação e do deploy, conectar `https://www.nomarooms.com/br` no [Tag Assistant](https://tagassistant.google.com/), com manutenção desativada. Confirmar o contêiner, as tags base, uma carga do contêiner por documento e ausência de conversões ao navegar por home/categorias. Não clicar em atendimento, enviar formulários, abrir pedidos ou executar `dataLayer.push` manualmente em produção. Preview/Debug não impede envios reais. A validação do evento e do destino pode usar um ambiente isolado com saídas de rede bloqueadas; em produção, observar apenas um atendimento legítimo, sem gerar um clique artificial.
+
+Referências: [eventos na camada de dados](https://developers.google.com/tag-platform/tag-manager/datalayer), [configuração de conversões Google Ads no GTM](https://support.google.com/tagmanager/answer/6105160), [auditoria do contêiner e instalação](./google-tag-manager.md).
